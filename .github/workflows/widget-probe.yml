@@ -44,10 +44,10 @@ jobs:
       - name: Upload independent probe IPA and SHA256 (no release)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: QuotaProbe-0.1.0-iOS16-arm64
+          name: QuotaProbe-0.1.1-iOS16-arm64
           path: |
-            dist-widgetprobe/QuotaProbe-0.1.0.ipa
-            dist-widgetprobe/QuotaProbe-0.1.0.ipa.sha256
+            dist-widgetprobe/QuotaProbe-0.1.1.ipa
+            dist-widgetprobe/QuotaProbe-0.1.1.ipa.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30

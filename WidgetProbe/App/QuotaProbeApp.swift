@@ -24,12 +24,12 @@ private struct ProbeView: View {
                 Section {
                     Text("模拟 / TEST · FAKE DATA")
                         .font(.title2.bold()).foregroundColor(.orange)
-                    Text("独立 QuotaProbe 0.1.0 (1)，可与 QuotaWatch 并排安装。所有账户与数字均为假数据；无网络、密钥、登录或真实余额。")
+                    Text("独立 QuotaProbe 0.1.1 (2)，可与 QuotaWatch 并排安装。所有账户与数字均为假数据；无网络、密钥、登录或真实余额。")
                     Text("本地读取 / 重绘 ≠ 网络更新。此测试包不验证任何真实服务。")
                         .font(.footnote)
                 }
                 Section("手动兼容测试") {
-                    Text("1. 打开本 App，点击写入下一版假数据。\n2. 回主屏幕长按 → + → 找 QuotaProbe，添加中 / 大组件。\n3. 对比 App 的文件修订号与组件读取修订号。\n4. 再写下一版，返回主屏幕等待，再回 App 刷新诊断。")
+                    Text("1. 打开本 App，点击写入下一版假数据。\n2. 回主屏幕长按 → + → 找 QuotaProbe，添加小 / 中 / 大组件。\n3. 对比 App 的文件修订号与组件读取修订号。\n4. 再写下一版，返回主屏幕等待，再回 App 刷新诊断。")
                     Text("只请求 reloadTimelines，不保证立即重绘；系统可能延迟。2 / 4 分钟仅跨过预计重置时间，10 分钟标记过期，绝不自动恢复 100%。锁屏 / 重启后首次解锁、重新安装与持久性需真机验证。")
                         .font(.footnote)
                 }

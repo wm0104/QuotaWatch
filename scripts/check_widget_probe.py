@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_ID = "com.wm0104.quotawatch.widgetprobe"
 GROUP = "group." + APP_ID
 PRODUCTS = {"QuotaProbe": APP_ID, "QuotaProbeWidget": APP_ID + ".widget"}
-VERSION, BUILD, MIN_OS = "0.1.0", "1", "16.3"
+VERSION, BUILD, MIN_OS = "0.1.1", "2", "16.3"
 # Static tripwire, not a proof against deliberately obfuscated network/secret code.
 FORBIDDEN = re.compile(
     r"\b(?:URLSession|URLRequest|NSURLConnection|CFNetwork|NWConnection|NWListener|"

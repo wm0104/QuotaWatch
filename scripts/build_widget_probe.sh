@@ -86,13 +86,13 @@ STAGE=$(mktemp -d "$PWD/build/widgetprobe/package.XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/Payload"
 ditto --norsrc --noextattr "$APP" "$STAGE/Payload/QuotaProbe.app"
-IPA="$PWD/dist-widgetprobe/QuotaProbe-0.1.0.ipa"
+IPA="$PWD/dist-widgetprobe/QuotaProbe-0.1.1.ipa"
 rm -f "$IPA" "$IPA.sha256"
 (cd "$STAGE" && zip -qry "$IPA" Payload)
 python3 scripts/verify_widget_probe.py "$IPA"
 (
   cd dist-widgetprobe
-  shasum -a 256 QuotaProbe-0.1.0.ipa > QuotaProbe-0.1.0.ipa.sha256
-  shasum -a 256 -c QuotaProbe-0.1.0.ipa.sha256
+  shasum -a 256 QuotaProbe-0.1.1.ipa > QuotaProbe-0.1.1.ipa.sha256
+  shasum -a 256 -c QuotaProbe-0.1.1.ipa.sha256
 )
-echo 'Packaged independent dist-widgetprobe/QuotaProbe-0.1.0.ipa and SHA256'
+echo 'Packaged independent dist-widgetprobe/QuotaProbe-0.1.1.ipa and SHA256'

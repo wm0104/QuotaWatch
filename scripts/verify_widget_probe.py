@@ -55,7 +55,7 @@ def verify_app(app):
     require([p for p in entries if p.suffix == ".appex"] == [extension], "Unexpected nested extension")
     verify_bundle(extension, "QuotaProbeWidget")
     verify_bundle(app, "QuotaProbe")
-    print("Verified both bundles: 0.1.0 (1), iOS16.3, arm64, WidgetKit, isolated minimal entitlements")
+    print("Verified both bundles: 0.1.1 (2), iOS16.3, arm64, WidgetKit, isolated minimal entitlements")
 
 
 def safe_members(archive):

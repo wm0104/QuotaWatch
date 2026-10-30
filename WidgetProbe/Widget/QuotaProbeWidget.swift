@@ -62,11 +62,12 @@ private struct ProbeWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ProbeEntry
     private var large: Bool { family == .systemLarge }
+    private var small: Bool { family == .systemSmall }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: large ? 8 : 3) {
+        VStack(alignment: .leading, spacing: small ? 2 : (large ? 8 : 3)) {
             HStack {
-                Text("TEST / 模拟").font(.system(size: large ? 26 : 20, weight: .black))
+                Text("TEST / 模拟").font(.system(size: small ? 16 : (large ? 26 : 20), weight: .black))
                     .foregroundColor(.orange)
                 Spacer(minLength: 4)
                 Text("QuotaProbe").font(.caption2.bold())
@@ -74,11 +75,11 @@ private struct ProbeWidgetView: View {
             Text("\(entry.snapshot.map { "r\($0.revision)" } ?? "无版本") · 读取 \(clock(entry.readAt))")
                 .font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
             if let snapshot = entry.snapshot {
-                ForEach(Array(snapshot.accounts.prefix(large ? 3 : 2))) { account in
+                ForEach(Array(snapshot.accounts.prefix(large ? 3 : (small ? 1 : 2)))) { account in
                     accountRow(account)
                 }
                 if !large {
-                    Text("+1 模拟 DeepSeek 账户 · 大尺寸显示全部")
+                    Text(small ? "+2 模拟账户 · 中/大尺寸显示更多" : "+1 模拟 DeepSeek 账户 · 大尺寸显示全部")
                         .font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 if ProbeTimeline.isStale(snapshot, at: entry.date) {
@@ -101,7 +102,7 @@ private struct ProbeWidgetView: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(large ? 14 : 10)
+        .padding(small ? 8 : (large ? 14 : 10))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(uiColor: .systemBackground))
         .widgetURL(URL(string: "quotaprobe://open"))
@@ -127,8 +128,8 @@ private struct ProbeWidgetView: View {
             .lineLimit(1).minimumScaleFactor(0.75)
             if let reset = account.expectedResetAt {
                 Text(ProbeTimeline.resetPassed(account, at: entry.date)
-                    ? "预计重置已过 · 需刷新，未恢复 100%"
-                    : "预计重置 \(clock(reset)) · 非额度更新")
+                    ? (small ? "预计重置已过 · 待刷新" : "预计重置已过 · 需刷新，未恢复 100%")
+                    : (small ? "重置 \(clock(reset))" : "预计重置 \(clock(reset)) · 非额度更新"))
                     .font(.system(size: large ? 11 : 9))
                     .foregroundColor(ProbeTimeline.resetPassed(account, at: entry.date) ? .orange : .secondary)
                     .lineLimit(1).minimumScaleFactor(0.75)
@@ -150,7 +151,7 @@ struct QuotaProbeWidget: Widget {
             ProbeWidgetView(entry: entry)
         }
         .configurationDisplayName("QuotaProbe · 模拟 TEST")
-        .description("仅假数据 / 无网络。中尺寸 2+1，大尺寸全部三账户；不是真实余额组件。")
-        .supportedFamilies([.systemMedium, .systemLarge])
+        .description("仅假数据 / 无网络。小尺寸 1 账户，中尺寸 2+1，大尺寸全部三账户；不是真实余额组件。")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
