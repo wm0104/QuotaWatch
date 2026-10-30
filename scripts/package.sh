@@ -5,9 +5,9 @@ export COPYFILE_DISABLE=1
 APP=build/Build/Products/Release-iphoneos/QuotaWatch.app
 NAME=$(python3 -c 'import sys; sys.path.insert(0,"scripts"); from check_project import NAME, VERSION; print(NAME + "-" + VERSION)')
 test -d "$APP"
-# Sign the bundle (including its resource seal), not just the main Mach-O.
-# No -M: never inherit unexpected entitlements from a previous signature.
-ldid -SQuotaWatch/QuotaWatch.entitlements "$APP"
+# Use Apple's native ad-hoc signer so CodeResources and codesign verification agree.
+# This needs no developer certificate; ldid remains a read-only entitlement inspector.
+codesign --force --sign - --entitlements QuotaWatch/QuotaWatch.entitlements "$APP"
 python3 scripts/verify_bundle.py "$APP"
 rm -rf dist/Payload dist/verify
 mkdir -p dist/Payload
