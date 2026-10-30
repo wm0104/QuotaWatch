@@ -28,16 +28,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install build-only tools
+        run: brew install xcodegen ldid ripgrep
+
       - name: Verify Xcode 15.4 toolchain
         run: |
           set -euo pipefail
           test -d "$DEVELOPER_DIR"
           xcodebuild -version
           xcrun swiftc --version
-          xcodebuild -version | rg -qx 'Xcode 15\.4'
-
-      - name: Install build-only tools
-        run: brew install xcodegen ldid
+          xcodebuild -version | rg -x 'Xcode 15\.4'
 
       - name: Test portable core and source invariants
         run: bash scripts/test.sh
