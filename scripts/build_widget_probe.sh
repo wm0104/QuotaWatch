@@ -44,8 +44,25 @@ path.write_text(patch(path.read_text()))
 PY
 plutil -lint WidgetProbe/QuotaProbe.xcodeproj/project.pbxproj
 rg -x '[[:space:]]*objectVersion = 56;' WidgetProbe/QuotaProbe.xcodeproj/project.pbxproj
-xcodebuild -project WidgetProbe/QuotaProbe.xcodeproj -alltargets -configuration Release \
-  -sdk iphoneos -showBuildSettings -json > build/widgetprobe/build-settings.json
+# Query each target explicitly: Xcode's -alltargets JSON output may omit dependencies.
+for TARGET in QuotaProbe QuotaProbeWidget; do
+  xcodebuild -project WidgetProbe/QuotaProbe.xcodeproj -target "$TARGET" -configuration Release \
+    -sdk iphoneos -showBuildSettings -json > "build/widgetprobe/$TARGET-build-settings.json"
+done
+python3 - <<'PY'
+import json
+from pathlib import Path
+folder = Path('build/widgetprobe')
+records = []
+for name in ('QuotaProbe', 'QuotaProbeWidget'):
+    rows = json.loads((folder / (name + '-build-settings.json')).read_text())
+    selected = [row for row in rows if row.get('target') == name]
+    print('Build-settings query:', name, 'returned targets:', [row.get('target') for row in rows])
+    if len(selected) != 1:
+        raise ValueError('Expected one explicit build-settings record for ' + name)
+    records.append(selected[0])
+(folder / 'build-settings.json').write_text(json.dumps(records))
+PY
 python3 scripts/check_widget_probe.py --build-settings build/widgetprobe/build-settings.json
 xcodebuild \
   -project WidgetProbe/QuotaProbe.xcodeproj \
