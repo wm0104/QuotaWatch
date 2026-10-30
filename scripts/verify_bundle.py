@@ -39,7 +39,7 @@ def main():
     actual = plistlib.loads(subprocess.check_output(["ldid", "-e", str(executable)]))
     require(actual == ENTITLEMENTS, "Signed entitlements differ from the minimal allowlist")
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
-    print("Verified: QuotaWatch 0.1.1 (2), iOS 16.3, iPhone/iPad, arm64, minimal ad-hoc signature")
+    print("Verified: QuotaWatch 0.1.2 (3), iOS 16.3, iPhone/iPad, arm64, minimal ad-hoc signature")
 
 
 if __name__ == "__main__":

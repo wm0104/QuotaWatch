@@ -40,6 +40,7 @@ struct QuotaMetric: Codable, Equatable, Identifiable {
     var granted: Decimal? = nil
     var toppedUp: Decimal? = nil
     var unlimited: Bool = false
+    var durationSeconds: Int? = nil
 }
 
 struct QuotaSnapshot: Codable, Equatable {
@@ -47,6 +48,7 @@ struct QuotaSnapshot: Codable, Equatable {
     var metrics: [QuotaMetric]
     var plan: String? = nil
     var available: Bool? = nil
+    var creditsAvailable: Bool? = nil
 }
 
 struct AlertRule: Codable, Equatable, Identifiable {
@@ -104,6 +106,7 @@ enum AlertEvaluator {
             guard !rule.threshold.isNaN, rule.threshold >= 0,
                   evaluated.insert(rule.metricID).inserted,
                   let metric = snapshot.metrics.first(where: { $0.id == rule.metricID }),
+                  metric.unit != .credits || snapshot.creditsAvailable != false,
                   !metric.unlimited,
                   let remaining = metric.remaining,
                   !remaining.isNaN, remaining >= 0,

@@ -59,7 +59,8 @@ enum QuotaParser {
                 }
                 snapshot = QuotaSnapshot(
                     capturedAt: now, metrics: metrics, plan: response.plan,
-                    available: response.rateLimit?.allowed
+                    available: response.rateLimit?.allowed,
+                    creditsAvailable: response.credits?.hasCredits
                 )
             }
             guard Set(snapshot.metrics.map(\.id)).count == snapshot.metrics.count else {
@@ -98,7 +99,7 @@ enum QuotaParser {
                 id: "\(prefix).\(role)\(durationID)", title: "\(title) \(label)\(durationTitle)",
                 unit: .percent,
                 remaining: window.used.map { min(Decimal(100), max(Decimal.zero, Decimal(100) - $0.value)) },
-                resetAt: reset
+                resetAt: reset, durationSeconds: window.duration
             ))
         }
         return result

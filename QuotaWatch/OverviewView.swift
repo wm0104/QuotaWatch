@@ -47,13 +47,28 @@ struct OverviewView: View {
                     }
                 }
                 Section {
-                    Label("仅在成功查询后判断低额提醒；后台检查由 iOS 择机执行，不保证准点。", systemImage: "info.circle")
+                    EmptyView()
+                } footer: {
+                    Label("成功查询后判断低额提醒；后台由 iOS 择机检查，不保证准点。", systemImage: "info.circle")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
             .navigationTitle("QuotaWatch")
+            .navigationBarTitleDisplayMode(.inline)
+            .listStyle(.insetGrouped)
             .refreshable { await store.refreshAll(forced: true) }
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image("BrandMark")
+                            .resizable().scaledToFit().frame(width: 28, height: 28)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .accessibilityHidden(true)
+                        Text("QuotaWatch").font(.headline)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { settings = true } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("设置与通知权限")
@@ -83,25 +98,41 @@ struct AccountSummary: View {
     let account: Account
     let refreshing: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text(account.alias).font(.headline)
-                Spacer()
-                if refreshing { ProgressView().controlSize(.small) }
-                else if account.requiresAuth { Image(systemName: "person.crop.circle.badge.exclamationmark").foregroundColor(.orange) }
-            }
-            if let snapshot = account.snapshot {
-                ForEach(snapshot.metrics.prefix(3)) { metric in
-                    MetricValueRow(metric: metric, emphasized: !MetricPresentation.stale(account))
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Text(account.alias).font(.headline).foregroundColor(.primary)
+                    Spacer(minLength: 0)
+                    if refreshing { ProgressView().controlSize(.small).accessibilityLabel("正在刷新") }
+                    else if account.requiresAuth {
+                        Image(systemName: "person.crop.circle.badge.exclamationmark")
+                            .foregroundColor(.orange).accessibilityLabel("需要重新登录")
+                    }
                 }
-                if snapshot.metrics.isEmpty { Text("服务未返回可展示的额度").font(.footnote).foregroundColor(.secondary) }
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(MetricPresentation.stale(account, now: context.date) ? "数据已过期／待刷新" : "已更新 \(snapshot.capturedAt.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption).foregroundColor(MetricPresentation.stale(account, now: context.date) ? .orange : .secondary)
+                if let snapshot = account.snapshot {
+                    let metrics = QuotaDisplayRules.overviewMetrics(snapshot)
+                    ForEach(metrics) { metric in
+                        let fresh = QuotaDisplayRules.isFresh(metric, account: account, now: context.date)
+                        MetricValueRow(metric: metric, emphasized: fresh,
+                                       low: QuotaDisplayRules.isLow(metric, account: account, now: context.date),
+                                       pendingRefresh: !fresh)
+                    }
+                    if metrics.isEmpty {
+                        Text(account.kind == .codex ? "暂无订阅窗口，Credits 请查看详情" : "服务未返回可展示的余额")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                    let stale = QuotaDisplayRules.needsRefresh(account, now: context.date)
+                    Label(stale ? "数据已过期／待刷新" : "更新于 \(snapshot.capturedAt.formatted(date: .omitted, time: .shortened))",
+                          systemImage: stale ? "exclamationmark.circle" : "clock")
+                        .font(.caption).foregroundColor(stale ? .orange : .secondary)
+                } else {
+                    Text("暂无数据").font(.subheadline).foregroundColor(.secondary)
                 }
-            } else { Text("暂无数据").font(.subheadline).foregroundColor(.secondary) }
-            if let error = account.error { Text(error).font(.caption).foregroundColor(.orange).lineLimit(2) }
-        }.padding(.vertical, 6)
+                if let error = account.error {
+                    Text(error).font(.caption).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true)
+                }
+            }.padding(.vertical, 8)
+        }
     }
 }
 
@@ -109,26 +140,42 @@ struct MetricValueRow: View {
     let metric: QuotaMetric
     var emphasized = true
     var detail = false
+    var low = false
+    var pendingRefresh = false
     @Environment(\.dynamicTypeSize) private var typeSize
     private var amount: some View {
         Text(MetricPresentation.value(metric))
             .font((detail ? Font.title2 : Font.title3).weight(.semibold).monospacedDigit())
-            .foregroundColor(emphasized ? .primary : .secondary)
+            .foregroundColor(low ? .orange : (emphasized ? .primary : .secondary))
             .fixedSize(horizontal: false, vertical: true)
     }
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 4) {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(metric.title).font(.subheadline).foregroundColor(.secondary)
+                    Text(QuotaDisplayRules.title(metric)).font(.subheadline).foregroundColor(.secondary)
                     amount
                 }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(metric.title).font(.subheadline).foregroundColor(.secondary)
-                    Spacer(minLength: 0)
-                    amount.layoutPriority(1)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(QuotaDisplayRules.title(metric)).font(.subheadline).foregroundColor(.secondary)
+                            .fixedSize()
+                        Spacer(minLength: 0)
+                        amount.fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(QuotaDisplayRules.title(metric)).font(.subheadline).foregroundColor(.secondary)
+                        amount
+                    }
                 }
+            }
+            if low {
+                Label("达到提醒阈值", systemImage: "exclamationmark.circle.fill")
+                    .font(.caption).foregroundColor(.orange)
+            } else if pendingRefresh {
+                Label("待刷新", systemImage: "clock")
+                    .font(.caption).foregroundColor(.secondary)
             }
         }.accessibilityElement(children: .combine)
     }
@@ -150,10 +197,5 @@ enum MetricPresentation {
         case .usd: return "$\(number(remaining))"
         case .credits: return "\(number(remaining)) credits"
         }
-    }
-    static func stale(_ account: Account, now: Date = Date()) -> Bool {
-        guard let snapshot = account.snapshot else { return true }
-        return account.error != nil || now.timeIntervalSince(snapshot.capturedAt) > account.kind.interval * 2
-            || snapshot.metrics.contains { $0.resetAt.map { $0 <= now } ?? false }
     }
 }

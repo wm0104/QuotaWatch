@@ -10,8 +10,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.1.2"
+    CURRENT_PROJECT_VERSION: "3"
     # Swift 5.9-compatible sources; 5.9 is not a legal Swift language-mode value.
     # Xcode 15.4 supplies Swift 5.10, using the Swift 5 language mode.
     SWIFT_VERSION: "5.0"
