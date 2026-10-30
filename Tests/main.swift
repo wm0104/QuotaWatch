@@ -240,7 +240,26 @@ func testAlerts() throws {
     expect(evaluate(alertSnapshot(0, unit: .credits, unlimited: true)).notify.isEmpty, "Unlimited credits never trigger")
 }
 
+func testCredentialRotation() {
+    let old = Credential(refreshToken: "synthetic-original", accountID: "fixture-account")
+    let new = Credential(refreshToken: "synthetic-rotated", accountID: "fixture-account")
+    expect(CredentialRotation.canCommit(new, previous: old, current: old, accountExists: true),
+           "A rotated token survives cancellation or a UI-only revision change")
+    expect(!CredentialRotation.canCommit(new, previous: old, current: old, accountExists: false),
+           "A token rotation cannot resurrect a deleted account")
+    expect(!CredentialRotation.canCommit(new, previous: old, current: new, accountExists: true),
+           "A late rotation cannot overwrite newer credentials")
+    expect(!CredentialRotation.canCommit(new, previous: old, current: nil, accountExists: true),
+           "Missing credentials cannot be recreated by a stale request")
+    let changed = Credential(refreshToken: "synthetic-original", accountID: "other-fixture-account")
+    expect(!CredentialRotation.canCommit(new, previous: old, current: changed, accountExists: true),
+           "A different current account blocks stale rotation")
+    expect(!CredentialRotation.canCommit(changed, previous: old, current: old, accountExists: true),
+           "A refresh response cannot switch the account")
+}
+
 do {
+    testCredentialRotation()
     try testModels()
     try testDeepSeek()
     try testCodex()

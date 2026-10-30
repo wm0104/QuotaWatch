@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Original QuotaWatch dial/monogram; deterministic opaque PNGs, stdlib only.
+"""Original QuotaWatch blue account cards; deterministic opaque PNGs, stdlib only.
 
 No fonts, downloaded art, logos or rounded-square mask. iOS supplies the mask.
 Regenerate: python3 scripts/generate_icons.py; validate checked-in art: --check.

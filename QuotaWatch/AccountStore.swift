@@ -173,17 +173,19 @@ final class AccountStore: ObservableObject {
             var didRefreshToken = false
             if value.kind == .codex,
                credential.expiresAt.map({ $0.timeIntervalSinceNow < 300 }) ?? false {
-                credential = try await CodexOAuth.refresh(credential)
+                let previous = credential
+                credential = try await CodexOAuth.refresh(previous)
+                try commitRotation(credential, previous: previous, id: id)
                 guard isCurrent(id, revision: revision) else { return }
-                try KeychainVault.save(credential, id: id)
                 didRefreshToken = true
             }
             let snapshot: QuotaSnapshot
             do { snapshot = try await QuotaClient.fetch(kind: value.kind, credential: credential) }
             catch let error as HTTPFailure where error.status == 401 && value.kind == .codex && !didRefreshToken {
-                credential = try await CodexOAuth.refresh(credential)
+                let previous = credential
+                credential = try await CodexOAuth.refresh(previous)
+                try commitRotation(credential, previous: previous, id: id)
                 guard isCurrent(id, revision: revision) else { return }
-                try KeychainVault.save(credential, id: id)
                 snapshot = try await QuotaClient.fetch(kind: value.kind, credential: credential)
             }
             guard isCurrent(id, revision: revision), var current = account(id) else { return }
@@ -209,6 +211,13 @@ final class AccountStore: ObservableObject {
             do { try update(current) } catch { message = safeMessage(error) }
         }
     }
+    private func commitRotation(_ refreshed: Credential, previous: Credential, id: UUID) throws {
+        let current = try? KeychainVault.load(id)
+        guard CredentialRotation.canCommit(refreshed, previous: previous, current: current,
+                                           accountExists: account(id)?.kind == .codex) else { return }
+        try KeychainVault.save(refreshed, id: id)
+    }
+
     private func evaluateAlerts(id: UUID, revision: UUID) async {
         guard let value = account(id), isCurrent(id, revision: revision), value.error == nil,
               let snapshot = value.snapshot else { return }

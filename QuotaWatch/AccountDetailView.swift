@@ -13,30 +13,16 @@ struct AccountDetailView: View {
         Group {
             if let account = store.account(id) {
                 Form {
-                    Section("账户") {
-                        LabeledContent("平台", value: account.kind.name)
-                        if let identity = account.identity { LabeledContent("登录身份", value: identity) }
-                        if let plan = account.snapshot?.plan { LabeledContent("套餐（服务端报告）", value: plan) }
-                        TextField("账户别名", text: $alias)
-                        if alias.trimmingCharacters(in: .whitespacesAndNewlines) != account.alias {
-                            Button("保存别名") {
-                                do { try store.rename(id, alias: alias) } catch { store.message = store.safeMessage(error) }
-                            }
-                        }
-                    }
                     Section("剩余额度") {
                         if let snapshot = account.snapshot {
                             if snapshot.metrics.isEmpty { Text("服务未返回可展示的额度。") }
                             ForEach(snapshot.metrics) { metric in
                                 VStack(alignment: .leading, spacing: 8) {
-                                    HStack(alignment: .firstTextBaseline) {
-                                        Text(metric.title).font(.headline)
-                                        Spacer()
-                                        Text(MetricPresentation.value(metric)).font(.headline.monospacedDigit())
-                                    }
+                                    MetricValueRow(metric: metric, emphasized: !MetricPresentation.stale(account), detail: true)
                                     if metric.unit == .percent, let remaining = metric.remaining {
                                         ProgressView(value: NSDecimalNumber(decimal: remaining).doubleValue, total: 100)
                                             .accessibilityLabel("剩余比例")
+                                            .accessibilityValue(MetricPresentation.value(metric))
                                     }
                                     if let reset = metric.resetAt {
                                         Text("重置：\(reset.formatted(date: .abbreviated, time: .shortened))")
@@ -79,6 +65,17 @@ struct AccountDetailView: View {
                         Button { Task { await store.refresh(id, forced: true) } } label: {
                             HStack { Text("刷新额度"); Spacer(); if store.busy.contains(id) { ProgressView() } }
                         }.disabled(store.busy.contains(id) || account.requiresAuth)
+                    }
+                    Section("账户") {
+                        LabeledContent("平台", value: account.kind.name)
+                        if let identity = account.identity { LabeledContent("登录身份", value: identity) }
+                        if let plan = account.snapshot?.plan { LabeledContent("套餐（服务端报告）", value: plan) }
+                        TextField("账户别名", text: $alias)
+                        if alias.trimmingCharacters(in: .whitespacesAndNewlines) != account.alias {
+                            Button("保存别名") {
+                                do { try store.rename(id, alias: alias) } catch { store.message = store.safeMessage(error) }
+                            }
+                        }
                     }
                     Section {
                         Button(account.kind == .codex ? "重新登录" : "更换 API Key") { editAccount = true }

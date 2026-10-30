@@ -9,14 +9,6 @@ struct OverviewView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Label("额度，一目了然", systemImage: "chart.bar.xaxis")
-                            .font(.title2.bold())
-                        Text("账户独立 · 本机保存 · 自定义提醒")
-                            .font(.subheadline).foregroundColor(.secondary)
-                    }.padding(.vertical, 8)
-                }
                 if let error = store.loadError {
                     Section {
                         Label(error, systemImage: "externaldrive.badge.exclamationmark")
@@ -100,11 +92,7 @@ struct AccountSummary: View {
             }
             if let snapshot = account.snapshot {
                 ForEach(snapshot.metrics.prefix(3)) { metric in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(metric.title).font(.subheadline).foregroundColor(.secondary)
-                        Spacer()
-                        Text(MetricPresentation.value(metric)).font(.subheadline.monospacedDigit().weight(.semibold))
-                    }
+                    MetricValueRow(metric: metric, emphasized: !MetricPresentation.stale(account))
                 }
                 if snapshot.metrics.isEmpty { Text("服务未返回可展示的额度").font(.footnote).foregroundColor(.secondary) }
                 TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -114,6 +102,35 @@ struct AccountSummary: View {
             } else { Text("暂无数据").font(.subheadline).foregroundColor(.secondary) }
             if let error = account.error { Text(error).font(.caption).foregroundColor(.orange).lineLimit(2) }
         }.padding(.vertical, 6)
+    }
+}
+
+struct MetricValueRow: View {
+    let metric: QuotaMetric
+    var emphasized = true
+    var detail = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    private var amount: some View {
+        Text(MetricPresentation.value(metric))
+            .font((detail ? Font.title2 : Font.title3).weight(.semibold).monospacedDigit())
+            .foregroundColor(emphasized ? .primary : .secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(metric.title).font(.subheadline).foregroundColor(.secondary)
+                    amount
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(metric.title).font(.subheadline).foregroundColor(.secondary)
+                    Spacer(minLength: 0)
+                    amount.layoutPriority(1)
+                }
+            }
+        }.accessibilityElement(children: .combine)
     }
 }
 

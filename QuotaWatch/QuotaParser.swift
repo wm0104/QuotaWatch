@@ -85,7 +85,12 @@ enum QuotaParser {
             if let epoch = window.resetAt, epoch < 0 { throw InvalidResponse.value }
             if let seconds = window.resetAfter, seconds < 0 { throw InvalidResponse.value }
             let durationID = window.duration.map { ".\($0)" } ?? ""
-            let durationTitle = window.duration.map { "（\($0) 秒）" } ?? ""
+            let durationTitle = window.duration.map { seconds -> String in
+                if seconds % 86400 == 0 { return "（\(seconds / 86400) 天）" }
+                if seconds % 3600 == 0 { return "（\(seconds / 3600) 小时）" }
+                if seconds % 60 == 0 { return "（\(seconds / 60) 分钟）" }
+                return "（\(seconds) 秒）"
+            } ?? ""
             // Absolute server time wins; never roll an expired window forward using its relative hint.
             let reset = window.resetAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
                 ?? window.resetAfter.map { now.addingTimeInterval(TimeInterval($0)) }

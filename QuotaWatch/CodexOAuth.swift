@@ -191,9 +191,11 @@ final class CodexOAuth: NSObject, ObservableObject, SFSafariViewControllerDelega
         }
     }
 
-    func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
-        guard controller === safari else { return }
-        cancel()
+    nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        Task { @MainActor [weak self] in
+            guard let self, controller === self.safari else { return }
+            self.cancel()
+        }
     }
 
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {

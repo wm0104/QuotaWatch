@@ -122,3 +122,15 @@ enum AlertEvaluator {
         return (notify, next)
     }
 }
+
+// Persist a successfully rotated token even if its query was cancelled or its UI revision changed.
+// Never resurrect a deleted account or overwrite credentials from a newer login.
+enum CredentialRotation {
+    static func canCommit(_ refreshed: Credential, previous: Credential,
+                          current: Credential?, accountExists: Bool) -> Bool {
+        guard accountExists, let current, let token = previous.refreshToken, !token.isEmpty,
+              current.refreshToken == token, current.accountID == previous.accountID,
+              refreshed.accountID == previous.accountID else { return false }
+        return true
+    }
+}

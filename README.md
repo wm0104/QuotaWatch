@@ -38,7 +38,7 @@
 
 ## 构建与测试
 
-GitHub Actions 运行于 macOS / Xcode，先运行 Foundation 核心样例测试，再编译 iOS arm64、使用 ldid ad-hoc 签名并打包 IPA。构建日志公开，不要向代码、Issue 或 Actions 输入真实密钥。
+GitHub Actions 运行于 macOS / Xcode，先运行 Foundation 核心样例测试，再编译 iOS arm64、使用系统 codesign 进行无需证书的 ad-hoc 签名并严格校验，ldid 仅用于读取签名权限。构建日志公开，不要向代码、Issue 或 Actions 输入真实密钥。
 
 ```sh
 # macOS，Apple Swift 工具链
