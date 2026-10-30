@@ -12,8 +12,8 @@ def patch(text):
         raise ValueError("Synchronized groups require newer Xcode; regenerate ordinary groups")
     fields = (
         (r'(?m)^([ \t]*objectVersion = )\d+(;)$', r'\g<1>56\2', 1),
-        (r'(?m)^([ \t]*compatibilityVersion = )"[^"]+"(;)$',
-         r'\g<1>"Xcode 14.0"\2', 1),
+        (r'(?m)^([ \t]*compatibilityVersion = )[^;\n]+(;)[ \t]*$',
+         r'\g<1>"Xcode 14.0"\2', None),
         (r'(?m)^([ \t]*preferredProjectObjectVersion = )\d+(;)$',
          r'\g<1>56\2', None),
     )
@@ -21,6 +21,11 @@ def patch(text):
         text, count = re.subn(pattern, replacement, text)
         if (required is not None and count != required) or count > 1:
             raise ValueError("Unexpected Xcode project format: " + pattern)
+    if not re.search(r'(?m)^[ \t]*compatibilityVersion = ', text):
+        text, count = re.subn(r'(?m)^([ \t]*)isa = PBXProject;[ \t]*$',
+                              r'\g<0>\n\1compatibilityVersion = "Xcode 14.0";', text)
+        if count != 1:
+            raise ValueError("Expected exactly one PBXProject when compatibilityVersion is absent")
     return text
 
 
@@ -32,7 +37,12 @@ def self_test():
     assert patch(old) == expected
     assert patch(expected) == expected
     assert patch(old.split("\t\t\tpreferred")[0]).endswith('"Xcode 14.0";\n')
-    for invalid in ("", old + old, old + "PBXFileSystemSynchronizedRootGroup"):
+    missing = '\tobjectVersion = 77;\n\t\t\tisa = PBXProject;\n'
+    assert 'compatibilityVersion = "Xcode 14.0";' in patch(missing)
+    assert patch(patch(missing)) == patch(missing)
+    unquoted = old.replace('"Xcode 16.0"', 'Xcode16')
+    assert patch(unquoted) == expected
+    for invalid in ("", old + old, old + "PBXFileSystemSynchronizedRootGroup", missing + missing):
         try:
             patch(invalid)
         except ValueError:
