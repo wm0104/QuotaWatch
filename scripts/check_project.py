@@ -9,18 +9,17 @@ NAME = "QuotaWatch"
 BUNDLE_ID = "com.wm0104.quotawatch"
 WIDGET_ID = BUNDLE_ID + ".widget"
 APP_GROUP = "group.com.wm0104.quotawatch"
-VERSION = "0.2.1"
-BUILD = "7"
+VERSION = "0.2.2"
+BUILD = "8"
 MIN_OS = "16.3"
 APP_ENTITLEMENTS = {
     "application-identifier": BUNDLE_ID,
-    "keychain-access-groups": [BUNDLE_ID, WIDGET_ID],
+    "keychain-access-groups": [BUNDLE_ID],
     "com.apple.security.application-groups": [APP_GROUP],
     "get-task-allow": False,
 }
 WIDGET_ENTITLEMENTS = {
     "application-identifier": WIDGET_ID,
-    "keychain-access-groups": [WIDGET_ID],
     "com.apple.security.application-groups": [APP_GROUP],
     "get-task-allow": False,
 }

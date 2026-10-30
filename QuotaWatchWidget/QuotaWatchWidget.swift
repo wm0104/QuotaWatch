@@ -36,19 +36,8 @@ struct QuotaWatchWidgetProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<QuotaWatchWidgetEntry>) -> Void) {
         let now = Date()
         let store = try? WidgetSnapshotStore.appGroup()
-        let cached = store?.read()
-        var snapshot = cached
-        if let cached, let store {
-            snapshot = refreshIfNeeded(cached, store: store, now: now)
-        }
-        let reason: String?
-        if snapshot == nil {
-            reason = store == nil ? "无法读取共享数据，请打开 QuotaWatch" : "打开 QuotaWatch 添加账户"
-        } else if snapshot?.accounts.isEmpty == true {
-            reason = "打开 QuotaWatch 添加账户"
-        } else {
-            reason = nil
-        }
+        let snapshot = store?.read()
+        let reason = statusReason(snapshot, storeAvailable: store != nil)
         let next = WidgetRefreshRules.nextRefreshDate(snapshot, at: now)
             ?? now.addingTimeInterval(900)
         var dates = [now]
@@ -64,106 +53,17 @@ struct QuotaWatchWidgetProvider: TimelineProvider {
         let now = Date()
         let store = try? WidgetSnapshotStore.appGroup()
         let snapshot = store?.read()
-        let reason: String?
+        return QuotaWatchWidgetEntry(
+            date: now, snapshot: snapshot,
+            reason: statusReason(snapshot, storeAvailable: store != nil))
+    }
+
+    private func statusReason(_ snapshot: WidgetSnapshot?, storeAvailable: Bool) -> String? {
         if snapshot == nil {
-            reason = store == nil ? "无法读取共享数据，请打开 QuotaWatch" : "打开 QuotaWatch 添加账户"
-        } else if snapshot?.accounts.isEmpty == true {
-            reason = "打开 QuotaWatch 添加账户"
-        } else {
-            reason = nil
+            return storeAvailable ? "打开 QuotaWatch 添加账户" : "无法读取共享数据，请打开 QuotaWatch"
         }
-        return QuotaWatchWidgetEntry(date: now, snapshot: snapshot, reason: reason)
-    }
-
-    private func refreshIfNeeded(_ snapshot: WidgetSnapshot,
-                                 store: WidgetSnapshotStore,
-                                 now: Date) -> WidgetSnapshot {
-        let candidates = snapshot.accounts.filter {
-            WidgetRefreshRules.needsRefresh($0, at: now)
-        }
-        guard !candidates.isEmpty else { return snapshot }
-        let allowed = Set(snapshot.accounts.map(\.id))
-        let jobs: [(UUID, ProviderKind, WidgetCredentialRecord)] = candidates.compactMap { account in
-            guard let kind = ProviderKind(rawValue: account.provider),
-                  let record = try? WidgetCredentialStore.load(
-                    accountID: account.id, provider: account.provider,
-                    allowedAccountIDs: allowed) else { return nil }
-            if kind == .codex, let expiresAt = record.expiresAt,
-               expiresAt.timeIntervalSince(now) < 60 { return nil }
-            return (account.id, kind, record)
-        }
-        guard !jobs.isEmpty else { return snapshot }
-
-        let box = ReplacementBox()
-        let finished = DispatchSemaphore(value: 0)
-        let work = Task {
-            await withTaskGroup(of: WidgetFetchResult.self) { group in
-                for (id, kind, record) in jobs {
-                    group.addTask {
-                        WidgetFetchResult(
-                            id: id,
-                            quota: try? await WidgetQuotaClient.fetch(
-                                kind: kind, credential: record, now: now))
-                    }
-                }
-                for await result in group {
-                    if let quota = result.quota {
-                        box.set(quota, for: result.id)
-                    }
-                }
-            }
-            finished.signal()
-        }
-        if finished.wait(timeout: .now() + 18) == .timedOut {
-            work.cancel()
-            return snapshot
-        }
-
-        let accounts = snapshot.accounts.map { account -> WidgetAccountSnapshot in
-            guard let quota = box.quota(for: account.id) else { return account }
-            return WidgetAccountSnapshot(
-                id: account.id, provider: account.provider,
-                displayAlias: account.displayAlias,
-                metrics: quota.metrics.map { metric in
-                    WidgetMetricSnapshot(
-                        id: metric.id, title: metric.title, unit: metric.unit.rawValue,
-                        remaining: metric.remaining, resetAt: metric.resetAt,
-                        unlimited: metric.unlimited, durationSeconds: metric.durationSeconds)
-                },
-                creditsAvailable: quota.creditsAvailable,
-                capturedAt: quota.capturedAt,
-                lastError: nil)
-        }
-        let updated = WidgetSnapshot(generatedAt: now, accounts: accounts)
-        try? store.write(updated)
-        return updated
-    }
-}
-
-private final class WidgetFetchResult: @unchecked Sendable {
-    let id: UUID
-    let quota: QuotaSnapshot?
-
-    init(id: UUID, quota: QuotaSnapshot?) {
-        self.id = id
-        self.quota = quota
-    }
-}
-
-private final class ReplacementBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [UUID: QuotaSnapshot] = [:]
-
-    func set(_ value: QuotaSnapshot, for id: UUID) {
-        lock.lock()
-        values[id] = value
-        lock.unlock()
-    }
-
-    func quota(for id: UUID) -> QuotaSnapshot? {
-        lock.lock()
-        defer { lock.unlock() }
-        return values[id]
+        if snapshot?.accounts.isEmpty == true { return "打开 QuotaWatch 添加账户" }
+        return nil
     }
 }
 

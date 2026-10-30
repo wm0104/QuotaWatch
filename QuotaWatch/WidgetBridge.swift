@@ -28,30 +28,4 @@ enum WidgetBridge {
         try? store.write(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: kind)
     }
-
-    static func syncCredentials(_ accounts: [Account]) {
-        let selected = Array(accounts.prefix(maximumAccounts))
-        let allowed = Set(selected.map(\.id))
-        for account in selected {
-            guard let credential = try? KeychainVault.load(account.id) else { continue }
-            let record = WidgetCredentialRecord(
-                provider: account.kind.rawValue,
-                apiKey: account.kind == .deepseek ? credential.apiKey : nil,
-                accessToken: account.kind == .codex ? credential.accessToken : nil,
-                refreshToken: nil,
-                accountID: credential.accountID,
-                identity: credential.identity,
-                expiresAt: credential.expiresAt)
-            try? WidgetCredentialStore.save(
-                record, accountID: account.id, provider: account.kind.rawValue,
-                allowedAccountIDs: allowed)
-        }
-        for account in accounts.dropFirst(maximumAccounts) {
-            try? WidgetCredentialStore.delete(accountID: account.id)
-        }
-    }
-
-    static func removeCredential(_ id: UUID) {
-        try? WidgetCredentialStore.delete(accountID: id)
-    }
 }
