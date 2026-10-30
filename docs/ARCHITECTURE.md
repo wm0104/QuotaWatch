@@ -48,7 +48,7 @@ Codex：使用公开客户端 OAuth 配置独立授权，随后 `GET https://cha
 
 ## 首版验收清单
 
-- [ ] iPhone / iPad iOS 16.3+ 编译、arm64、版本0.1.0/build1、ad-hoc签名、TrollStore 安装。
+- [ ] iPhone / iPad iOS 16.3+ 编译、arm64、版本0.1.1/build2、ad-hoc签名、TrollStore 安装。
 - [ ] 自有 Codex 账户网页登录、回调、取消、超时、端口占用、刷新令牌轮换和多账号身份核对。
 - [ ] 自有 DeepSeek Key 查询、失效 Key、网络权限、代理和离线处理。
 - [ ] 相同账户不重复添加，A失败不影响B，删除／重登后旧请求不可回写。

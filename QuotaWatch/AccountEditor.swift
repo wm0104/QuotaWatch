@@ -60,7 +60,8 @@ struct AccountEditor: View {
             .onAppear {
                 if let id = replacing, let account = store.account(id) { kind = account.kind; alias = account.alias }
             }
-            .onDisappear { operation?.cancel() }
+            // Safari may cover this form and trigger onDisappear on iOS 16.
+            // Cancel only through the explicit button, Safari dismissal, or OAuth timeout.
             .alert("未能完成", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("知道了", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }

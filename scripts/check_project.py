@@ -7,8 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "QuotaWatch"
 BUNDLE_ID = "com.wm0104.quotawatch"
-VERSION = "0.1.0"
-BUILD = "1"
+VERSION = "0.1.1"
+BUILD = "2"
 MIN_OS = "16.3"
 ENTITLEMENTS = {
     "application-identifier": BUNDLE_ID,

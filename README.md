@@ -47,7 +47,7 @@ swiftc QuotaWatch/Models.swift QuotaWatch/QuotaParser.swift Tests/main.swift -o 
 # iOS 工程由 XcodeGen 的 project.yml 生成，完整步骤见工作流。
 ```
 
-版本源为 project.yml / Info.plist，当前 **0.1.0 (1)**。Actions 产物包含 IPA 与 SHA-256。不上传凭据、不把测试夹具当成真实账号联网验证。
+版本源为 project.yml / Info.plist，当前 **0.1.1 (2)**。本次针对 Codex 登录页弹出即退出的问题，移除添加账户页在被 Safari 覆盖时误取消登录的生命周期逻辑；保留用户取消、超时及安全校验。新增源码级回归检查，真机是否解决仍需复测。Actions 产物包含 IPA 与 SHA-256。不上传凭据、不把测试夹具当成真实账号联网验证。
 
 ## 架构
 

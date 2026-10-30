@@ -28,4 +28,4 @@ Foundation only, portable to macOS swiftc for tests.
 
 ## Build
 
-Bundle com.wm0104.quotawatch; version 0.1.0, build 1; arm64 iPhone/iPad; iOS 16.3. Keychain group com.wm0104.quotawatch and application-identifier same; get-task-allow false. Never enterprise/private platform/root entitlements.
+Bundle com.wm0104.quotawatch; version 0.1.1, build 2; arm64 iPhone/iPad; iOS 16.3. Keychain group com.wm0104.quotawatch and application-identifier same; get-task-allow false. Never enterprise/private platform/root entitlements.
