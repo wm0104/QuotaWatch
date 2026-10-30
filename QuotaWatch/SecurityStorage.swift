@@ -4,9 +4,12 @@ import Security
 // Credentials never enter the account archive, logs or notifications.
 enum KeychainVault {
     private static let service = "com.wm0104.quotawatch"
+    private static let accessGroup = "com.wm0104.quotawatch"
     private static func query(_ id: UUID) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service, kSecAttrAccount as String: id.uuidString]
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: id.uuidString,
+         kSecAttrAccessGroup as String: accessGroup]
     }
     static func load(_ id: UUID) throws -> Credential {
         var q = query(id)

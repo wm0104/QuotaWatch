@@ -16,13 +16,21 @@ final class AccountStore: ObservableObject {
 
     func reloadArchive() {
         guard jobs.isEmpty else { return }
-        do { accounts = try LocalArchive.load(); loadError = nil }
-        catch { loadError = "本地数据读取失败，原文件已保留。请解锁后重试；在恢复前禁止写入。" }
+        do {
+            accounts = try LocalArchive.load()
+            loadError = nil
+            WidgetBridge.publish(accounts)
+            WidgetBridge.syncCredentials(accounts)
+        } catch { loadError = "本地数据读取失败，原文件已保留。请解锁后重试；在恢复前禁止写入。" }
     }
     func account(_ id: UUID) -> Account? { accounts.first { $0.id == id } }
     private func commit(_ list: [Account]) throws {
         guard loadError == nil else { throw QuotaError.message("数据处于只读保护状态，请先重试读取。") }
-        do { try LocalArchive.save(list); accounts = list }
+        do {
+            try LocalArchive.save(list)
+            accounts = list
+            WidgetBridge.publish(list)
+        }
         catch { throw QuotaError.message("本地保存失败，未覆盖当前账户状态，请检查设备空间或解锁后重试。") }
     }
     private func isCurrent(_ id: UUID, revision: UUID) -> Bool {
@@ -98,6 +106,7 @@ final class AccountStore: ObservableObject {
             else { try? KeychainVault.delete(value.id) }
             throw error
         }
+        WidgetBridge.syncCredentials(accounts)
         await evaluateAlerts(id: value.id, revision: value.revision)
     }
 
@@ -122,6 +131,7 @@ final class AccountStore: ObservableObject {
         }
         cancel(id)
         notifications.remove(accountID: id)
+        WidgetBridge.removeCredential(id)
     }
     func setRule(_ id: UUID, metricID: String, enabled: Bool, threshold: Decimal) async throws {
         guard var value = account(id), let metric = value.snapshot?.metrics.first(where: { $0.id == metricID }),
@@ -194,6 +204,7 @@ final class AccountStore: ObservableObject {
             current.requiresAuth = false
             current.nextAllowedAt = nil
             try update(current)
+            WidgetBridge.syncCredentials(accounts)
             await evaluateAlerts(id: id, revision: revision)
         } catch is CancellationError { return }
         catch let error as URLError where error.code == .cancelled { return }
@@ -216,6 +227,7 @@ final class AccountStore: ObservableObject {
         guard CredentialRotation.canCommit(refreshed, previous: previous, current: current,
                                            accountExists: account(id)?.kind == .codex) else { return }
         try KeychainVault.save(refreshed, id: id)
+        WidgetBridge.syncCredentials(accounts)
     }
 
     private func evaluateAlerts(id: UUID, revision: UUID) async {
