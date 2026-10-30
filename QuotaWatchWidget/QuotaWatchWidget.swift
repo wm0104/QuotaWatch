@@ -83,15 +83,14 @@ struct QuotaWatchWidgetProvider: TimelineProvider {
         }
         guard !candidates.isEmpty else { return snapshot }
         let allowed = Set(snapshot.accounts.map(\.id))
-        var jobs: [(UUID, ProviderKind, WidgetCredentialRecord)] = []
-        for account in candidates {
+        let jobs: [(UUID, ProviderKind, WidgetCredentialRecord)] = candidates.compactMap { account in
             guard let kind = ProviderKind(rawValue: account.provider),
                   let record = try? WidgetCredentialStore.load(
                     accountID: account.id, provider: account.provider,
-                    allowedAccountIDs: allowed) else { continue }
+                    allowedAccountIDs: allowed) else { return nil }
             if kind == .codex, let expiresAt = record.expiresAt,
-               expiresAt.timeIntervalSince(now) < 60 { continue }
-            jobs.append((account.id, kind, record))
+               expiresAt.timeIntervalSince(now) < 60 { return nil }
+            return (account.id, kind, record)
         }
         guard !jobs.isEmpty else { return snapshot }
 
