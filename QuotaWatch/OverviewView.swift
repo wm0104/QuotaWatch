@@ -123,7 +123,7 @@ struct AccountSummary: View {
                             .font(.footnote).foregroundColor(.secondary)
                     }
                     let stale = QuotaDisplayRules.needsRefresh(account, now: context.date)
-                    Label(stale ? "数据已过期／待刷新" : "更新于 \(snapshot.capturedAt.formatted(date: .omitted, time: .shortened))",
+                    Label(stale ? "数据已过期／待刷新" : "更新于 \(DateDisplay.stamp(snapshot.capturedAt))",
                           systemImage: stale ? "exclamationmark.circle" : "clock")
                         .font(.caption).foregroundColor(stale ? .orange : .secondary)
                 } else {

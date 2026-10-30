@@ -53,14 +53,14 @@ class UIIntegrationChecks(unittest.TestCase):
         self.assertIn('不能据此判断套餐不支持', source)
         self.assertIn('Credits 余额为 0，不等于订阅额度为 0', source)
         self.assertIn('管理原 Credits 提醒规则', source)
-        self.assertIn('ProgressView(value:', source)
+        self.assertIn('DetailProgressBar', source)
 
     def test_all_existing_account_actions_are_preserved(self):
         overview = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()
         detail = (ROOT / 'QuotaWatch/AccountDetailView.swift').read_text()
         for fragment in ('store.refreshAll(forced: true)', 'AccountEditor(store: store)', 'SettingsView(', 'store.delete(id)'):
             self.assertIn(fragment, overview)
-        for fragment in ('store.rename(id, alias: alias)', 'store.refresh(id, forced: true)',
+        for fragment in ('store.rename(id, alias: alias)', 'store.refresh(account.id, forced: true)',
                          'RuleEditor(store:', 'AccountEditor(store: store, replacing: id)', 'store.delete(id)'):
             self.assertIn(fragment, detail)
 
