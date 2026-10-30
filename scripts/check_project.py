@@ -9,8 +9,8 @@ NAME = "QuotaWatch"
 BUNDLE_ID = "com.wm0104.quotawatch"
 WIDGET_ID = BUNDLE_ID + ".widget"
 APP_GROUP = "group.com.wm0104.quotawatch"
-VERSION = "0.2.0"
-BUILD = "6"
+VERSION = "0.2.1"
+BUILD = "7"
 MIN_OS = "16.3"
 APP_ENTITLEMENTS = {
     "application-identifier": BUNDLE_ID,

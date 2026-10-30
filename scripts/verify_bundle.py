@@ -68,7 +68,7 @@ def main():
     verify_bundle(app, "QuotaWatch", BUNDLE_ID, APP_ENTITLEMENTS)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)],
                    check=True)
-    print("Verified: QuotaWatch 0.2.0 (6) + QuotaWatchWidget, iOS 16.3, arm64, "
+    print("Verified: QuotaWatch 0.2.1 (7) + QuotaWatchWidget, iOS 16.3, arm64, "
           "isolated minimal entitlements")
 
 

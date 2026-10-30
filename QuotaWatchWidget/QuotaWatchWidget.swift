@@ -173,88 +173,131 @@ private struct QuotaWatchWidgetView: View {
 
     private var small: Bool { family == .systemSmall }
     private var large: Bool { family == .systemLarge }
-    private var accountLimit: Int { small ? 1 : (large ? 5 : 2) }
-    private var metricLimit: Int { small ? 1 : 2 }
+    private var accountLimit: Int { small ? 1 : (large ? 5 : 3) }
+    private var metricLimit: Int { small ? 2 : 2 }
 
     var body: some View {
         let summary = WidgetRefreshRules.displaySummary(
             entry.snapshot, limit: accountLimit, at: entry.date)
-        VStack(alignment: .leading, spacing: small ? 4 : 7) {
+        VStack(alignment: .leading, spacing: small ? 2 : (large ? 4 : 3)) {
             header(summary)
             if summary.accounts.isEmpty {
                 Text(entry.reason ?? "打开 QuotaWatch 添加账户")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 10)).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(summary.accounts) { account in
                     accountView(account, now: entry.date)
                     if account.id != summary.accounts.last?.id {
-                        Divider()
+                        Divider().opacity(0.55)
                     }
                 }
                 if summary.overflowCount > 0 {
-                    Text("还有 \(summary.overflowCount) 个账户")
-                        .font(.caption2).foregroundColor(.secondary)
+                    Text(overflowText(summary))
+                        .font(.system(size: 9)).foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
+            }
+            if small, let snapshot = entry.snapshot, !summary.accounts.isEmpty {
+                Text(summary.needsRefresh
+                     ? "待刷新 · 打开 App"
+                     : "更新 \(WidgetClock.time(snapshot.generatedAt))")
+                    .font(.system(size: 8))
+                    .foregroundColor(summary.needsRefresh ? .orange : .secondary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(small ? 9 : 12)
+        .padding(small ? 8 : 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(uiColor: .systemBackground))
     }
 
     private func header(_ summary: WidgetDisplaySummary) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("QuotaWatch").font(small ? .subheadline.bold() : .headline)
-            Spacer(minLength: 4)
-            if summary.needsRefresh {
-                Text("待刷新")
-                    .font(.caption2.weight(.semibold)).foregroundColor(.orange)
-            } else if let snapshot = entry.snapshot {
-                Text("更新 \(WidgetClock.time(snapshot.generatedAt))")
-                    .font(.caption2).foregroundColor(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("QuotaWatch")
+                .font(small ? .caption.bold() : .subheadline.bold())
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 2)
+            if !small {
+                if summary.needsRefresh {
+                    Text("待刷新")
+                        .font(.system(size: 9, weight: .semibold)).foregroundColor(.orange)
+                } else if let snapshot = entry.snapshot {
+                    Text("更新 \(WidgetClock.time(snapshot.generatedAt))")
+                        .font(.system(size: 9)).foregroundColor(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
         }
     }
 
     private func accountView(_ account: WidgetAccountSnapshot, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: small ? 2 : 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 4) {
+                Image(providerAsset(account.provider))
+                    .resizable().scaledToFit()
+                    .frame(width: 12, height: 12)
+                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    .accessibilityHidden(true)
                 Text(account.displayAlias)
-                    .font(small ? .caption.bold() : .subheadline.weight(.semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
-                Spacer(minLength: 4)
+                Spacer(minLength: 2)
                 Text(providerName(account.provider))
-                    .font(.caption2).foregroundColor(.secondary)
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(providerColor(account.provider))
+                    .lineLimit(1)
             }
             let metrics = Array(WidgetRefreshRules.summaryMetrics(
                 account, at: now, limit: WidgetSnapshotLimits.maximumMetricsPerAccount)
                 .filter { $0.metric.unit != "credits" }
                 .prefix(metricLimit))
             if metrics.isEmpty {
-                Text("暂无订阅额度").font(.caption2).foregroundColor(.secondary)
+                Text("暂无订阅额度").font(.system(size: 9)).foregroundColor(.secondary)
             } else {
                 ForEach(metrics) { item in
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(metricTitle(item.metric, at: now))
-                            .font(.caption2).foregroundColor(.secondary).lineLimit(1)
-                        Spacer(minLength: 4)
+                            .font(.system(size: 9)).foregroundColor(.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Spacer(minLength: 2)
                         Text(metricValue(item.metric))
-                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                            .foregroundColor(item.resetStatus.isPassed ? .secondary
+                                             : (item.metric.remaining == 0 ? .orange : .primary))
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                 }
             }
             if account.lastError?.isEmpty == false {
                 Text("需打开 App 更新")
-                    .font(.caption2).foregroundColor(.orange).lineLimit(1)
+                    .font(.system(size: 8)).foregroundColor(.orange).lineLimit(1)
             }
         }
     }
 
     private func providerName(_ provider: String) -> String {
         provider == "codex" ? "Codex" : (provider == "deepseek" ? "DeepSeek" : "账户")
+    }
+
+    private func providerAsset(_ provider: String) -> String {
+        provider == "codex" ? "CodexLogo" : (provider == "deepseek" ? "DeepSeekLogo" : "CodexLogo")
+    }
+
+    private func providerColor(_ provider: String) -> Color {
+        provider == "codex"
+            ? Color(red: 0.16, green: 0.34, blue: 0.84)
+            : Color(red: 0.08, green: 0.52, blue: 0.48)
+    }
+
+    private func overflowText(_ summary: WidgetDisplaySummary) -> String {
+        let hidden = Array((entry.snapshot?.accounts ?? []).dropFirst(summary.accounts.count))
+        let providers = Set(hidden.map { providerName($0.provider) })
+        if summary.overflowCount == 1, providers.count == 1, let name = providers.first {
+            return "还有 1 个 \(name) 账户"
+        }
+        return "还有 \(summary.overflowCount) 个账户"
     }
 
     private func metricTitle(_ metric: WidgetMetricSnapshot, at now: Date) -> String {
@@ -274,8 +317,7 @@ private struct QuotaWatchWidgetView: View {
             base = metric.title
         }
         if let resetAt = metric.resetAt {
-            let suffix = resetAt <= now ? "待刷新" : WidgetClock.time(resetAt)
-            return base + " · " + suffix
+            return base + " · " + WidgetClock.reset(resetAt, now: now)
         }
         return base
     }
@@ -326,14 +368,30 @@ private enum WidgetNumber {
 }
 
 private enum WidgetClock {
-    private static let formatter: DateFormatter = {
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "HH:mm"
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M/d h:mm a"
         return formatter
     }()
 
-    static func time(_ date: Date) -> String { formatter.string(from: date) }
+    static func time(_ date: Date) -> String {
+        timeFormatter.string(from: date)
+    }
+
+    static func reset(_ date: Date, now: Date) -> String {
+        if date <= now { return "待刷新" }
+        if Calendar.current.isDate(date, inSameDayAs: now) {
+            return timeFormatter.string(from: date)
+        }
+        return dayFormatter.string(from: date)
+    }
 }
 
 @main
