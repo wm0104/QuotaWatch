@@ -1,0 +1,62 @@
+name: Build independent QuotaProbe IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'WidgetProbe/**'
+      - 'scripts/build_widget_probe.sh'
+      - 'scripts/check_widget_probe.py'
+      - 'scripts/verify_widget_probe.py'
+      - '.github/workflows/widget-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: widget-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install build-only tools before any use
+        run: brew install xcodegen ldid ripgrep
+
+      - name: Test, generate, build, sign inside-out and verify IPA
+        run: bash scripts/build_widget_probe.sh
+
+      - name: Upload independent probe IPA and SHA256 (no release)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: QuotaProbe-0.1.0-iOS16-arm64
+          path: |
+            dist-widgetprobe/QuotaProbe-0.1.0.ipa
+            dist-widgetprobe/QuotaProbe-0.1.0.ipa.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload isolated probe build log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: QuotaProbe-build-log
+          path: build/widgetprobe-build.log
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,69 @@
+name: QuotaProbe
+options:
+  bundleIdPrefix: com.wm0104.quotawatch.widgetprobe
+  deploymentTarget:
+    iOS: "16.3"
+  xcodeVersion: "15.4"
+  objectVersion: 56
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.3"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: "NO"
+    SDKROOT: iphoneos
+    SUPPORTED_PLATFORMS: iphoneos
+    TARGETED_DEVICE_FAMILY: "1,2"
+    SUPPORTS_MACCATALYST: "NO"
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    GENERATE_INFOPLIST_FILE: "NO"
+    SWIFT_EMIT_LOC_STRINGS: "NO"
+targets:
+  QuotaProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes: [Info.plist, QuotaProbe.entitlements]
+      - path: Shared
+    dependencies:
+      - target: QuotaProbeWidget
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: QuotaProbe
+        PRODUCT_BUNDLE_IDENTIFIER: com.wm0104.quotawatch.widgetprobe
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/QuotaProbe.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  QuotaProbeWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+        excludes: [Info.plist, QuotaProbeWidget.entitlements]
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_NAME: QuotaProbeWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.wm0104.quotawatch.widgetprobe.widget
+        INFOPLIST_FILE: Widget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widget/QuotaProbeWidget.entitlements
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        SKIP_INSTALL: "YES"
+schemes:
+  QuotaProbe:
+    build:
+      targets:
+        QuotaProbe: all
+    run:
+      config: Debug
+    archive:
+      config: Release
