@@ -8,19 +8,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class UIIntegrationChecks(unittest.TestCase):
-    def test_selected_logo_is_packaged_at_all_scales(self):
-        asset = ROOT / 'QuotaWatch/Assets.xcassets/BrandMark.imageset'
-        manifest = json.loads((asset / 'Contents.json').read_text())
-        self.assertEqual({image['scale'] for image in manifest['images']}, {'1x', '2x', '3x'})
-        for image in manifest['images']:
-            data = (asset / image['filename']).read_bytes()
-            self.assertTrue(data.startswith(b'\x89PNG\r\n\x1a\n'))
-            pixels = 28 * int(image['scale'][0])
-            self.assertEqual(struct.unpack_from('>2I', data, 16), (pixels, pixels))
+    def test_provider_icons_are_in_section_titles_not_app_title(self):
+        for name in ('CodexLogo', 'DeepSeekLogo'):
+            asset = ROOT / ('QuotaWatch/Assets.xcassets/' + name + '.imageset')
+            manifest = json.loads((asset / 'Contents.json').read_text())
+            self.assertEqual({image['scale'] for image in manifest['images']}, {'1x', '2x', '3x'})
+            for image in manifest['images']:
+                data = (asset / image['filename']).read_bytes()
+                self.assertTrue(data.startswith(b'\x89PNG\r\n\x1a\n'))
+                pixels = 24 * int(image['scale'][0])
+                self.assertEqual(struct.unpack_from('>2I', data, 16), (pixels, pixels))
         source = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()
-        self.assertIn('Image("BrandMark")', source)
-        self.assertIn('Text("QuotaWatch")', source)
-        self.assertIn('.navigationBarTitleDisplayMode(.inline)', source)
+        self.assertIn('Image(kind == .codex ? "CodexLogo" : "DeepSeekLogo")', source)
+        self.assertIn('} header: {\n                            HStack(spacing: 8)', source)
+        self.assertIn('Text(kind.name)', source)
+        self.assertIn('.textCase(nil)', source)
+        self.assertNotIn('Image("BrandMark")', source)
+        self.assertNotIn('placement: .principal', source)
+        self.assertIn('.navigationTitle("QuotaWatch")', source)
+        models = (ROOT / 'QuotaWatch/Models.swift').read_text()
+        self.assertIn('case .codex: return "Codex"', models)
+        self.assertIn('case .deepseek: return "DeepSeek"', models)
+        provenance = json.loads((ROOT / 'QuotaWatch/ProviderIconSources.json').read_text())
+        self.assertEqual({entry['asset'] for entry in provenance['icons']}, {'CodexLogo', 'DeepSeekLogo'})
 
     def test_home_remains_native_digits_and_filters_credits(self):
         source = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()

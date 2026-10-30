@@ -43,7 +43,19 @@ struct OverviewView: View {
                                     }
                                 }
                             }
-                        } header: { Text(kind.name) }
+                        } header: {
+                            HStack(spacing: 8) {
+                                Image(kind == .codex ? "CodexLogo" : "DeepSeekLogo")
+                                    .renderingMode(.original)
+                                    .resizable().scaledToFit().frame(width: 24, height: 24)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                    .accessibilityHidden(true)
+                                Text(kind.name)
+                            }
+                            .textCase(nil)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(.isHeader)
+                        }
                     }
                 }
                 Section {
@@ -58,17 +70,6 @@ struct OverviewView: View {
             .listStyle(.insetGrouped)
             .refreshable { await store.refreshAll(forced: true) }
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Image("BrandMark")
-                            .resizable().scaledToFit().frame(width: 28, height: 28)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .accessibilityHidden(true)
-                        Text("QuotaWatch").font(.headline)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isHeader)
-                }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { settings = true } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("设置与通知权限")
