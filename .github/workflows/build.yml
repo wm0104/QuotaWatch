@@ -1,0 +1,93 @@
+name: Build QuotaWatch IPA
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quotawatch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify Xcode 15.4 toolchain
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          xcrun swiftc --version
+          xcodebuild -version | rg -qx 'Xcode 15\.4'
+
+      - name: Install build-only tools
+        run: brew install xcodegen ldid
+
+      - name: Test portable core and source invariants
+        run: bash scripts/test.sh
+
+      - name: Generate Xcode 15 compatible project
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          python3 scripts/patch_project.py
+          plutil -lint QuotaWatch.xcodeproj/project.pbxproj
+          xcodebuild -list -project QuotaWatch.xcodeproj
+
+      - name: Build unsigned arm64 iOS Release
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild \
+            -project QuotaWatch.xcodeproj \
+            -scheme QuotaWatch \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            DEVELOPMENT_TEAM='' \
+            build 2>&1 | tee build/xcodebuild.log
+
+      - name: Ad-hoc sign, verify and package IPA
+        run: bash scripts/package.sh
+
+      - name: Upload IPA and SHA256 (no release)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: QuotaWatch-0.1.0-iOS16-arm64
+          path: |
+            dist/QuotaWatch-0.1.0.ipa
+            dist/QuotaWatch-0.1.0.ipa.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: QuotaWatch-build-log
+          path: build/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,59 @@
+name: QuotaWatch
+options:
+  bundleIdPrefix: com.wm0104
+  deploymentTarget:
+    iOS: "16.3"
+  xcodeVersion: "15.4"
+  createIntermediateGroups: true
+  # scripts/patch_project.py enforces this even if XcodeGen ignores the option.
+  objectVersion: 56
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Swift 5.9-compatible sources; 5.9 is not a legal Swift language-mode value.
+    # Xcode 15.4 supplies Swift 5.10, using the Swift 5 language mode.
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.3"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: "NO"
+    SDKROOT: iphoneos
+    SUPPORTED_PLATFORMS: iphoneos
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+
+targets:
+  QuotaWatch:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.3"
+    sources:
+      - path: QuotaWatch
+        excludes:
+          - Info.plist
+          - QuotaWatch.entitlements
+    settings:
+      base:
+        PRODUCT_NAME: QuotaWatch
+        PRODUCT_BUNDLE_IDENTIFIER: com.wm0104.quotawatch
+        INFOPLIST_FILE: QuotaWatch/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_ENTITLEMENTS: QuotaWatch/QuotaWatch.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: "NO"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_EMIT_LOC_STRINGS: "NO"
+
+schemes:
+  QuotaWatch:
+    build:
+      targets:
+        QuotaWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release
