@@ -38,6 +38,6 @@ Foundation only, portable to macOS swiftc for tests.
 
 ## Build
 
-Bundle com.wm0104.quotawatch; version **0.2.2**, build **8**; arm64 iPhone/iPad; iOS 16.3; Xcode 15.4 / Swift 5 mode. Keychain group com.wm0104.quotawatch and application-identifier same; get-task-allow false. No App Group, embedded formal extension or shared widget credential store. Never enterprise/private platform/root entitlements. `WidgetProbe/` and its workflow remain isolated and unchanged.
+Bundle com.wm0104.quotawatch; version **0.2.2**, build **8**; arm64 iPhone/iPad; iOS 16.3; Xcode 15-compatible project format / Swift 5 mode, CI on macOS 15 / Xcode 16.4 after the macOS 14 runner retirement. Keychain group com.wm0104.quotawatch and application-identifier same; get-task-allow false. No App Group, embedded formal extension or shared widget credential store. Never enterprise/private platform/root entitlements. `WidgetProbe/` and its workflow remain isolated and unchanged.
 
 `scripts/test.sh` runs Python/source contracts then both Foundation fixture binaries using an external temporary directory. `--source-only` explicitly skips Swift, never substitutes for compilation. Packaging validates minimal entitlements, arm64, IOS Mach-O/minimum OS, strict resource signatures and absence of PlugIns contents, both before and after IPA roundtrip. Mocked packaging tests validate rejection logic, not actual signatures.

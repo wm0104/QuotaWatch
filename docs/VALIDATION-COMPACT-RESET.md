@@ -15,6 +15,10 @@
 
 以上为源码查证，不是动画时序、布局或真机运行验收。
 
+## 构建环境诊断
+
+首次测试提交 `406b7b7940981659cb4309a2119338fedfc1a9c2` 的自动 push 构建 `42950909459` 在进入任何步骤前被平台取消，annotation 为 `The configuration 'macos-14-arm64-us-default' is not supported`，不是代码或夹具失败。核对 actions/runner-images 官方清单后，正式构建改为受支持的 `macos-15` / 明确预装的 Xcode 16.4，并保留精确工具链版本检查；最低 iOS、Swift 5 语言模式、工程 objectVersion 56 和产品版本不变。独立 Probe 工作流按范围保持原样，此次没有触发或验证它的实际云构建环境。
+
 ## 已执行的本地检查
 
 环境无 `swiftc` / `xcrun`。临时语法工具、日志和生成文件放源码树外的验证缓存，Python 关闭 bytecode 写入。

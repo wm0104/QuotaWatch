@@ -44,7 +44,7 @@
 GitHub Actions 运行于 macOS / Xcode，先运行 Foundation 核心样例测试，再编译 iOS arm64、使用系统 codesign 进行无需证书的 ad-hoc 签名并严格校验，ldid 仅用于读取签名权限。构建日志公开，不要向代码、Issue 或 Actions 输入真实密钥。
 
 ```sh
-# macOS / Xcode 15.4：源码检查 + 两组 Foundation Swift 夹具
+# macOS / Xcode 16.4：源码检查 + 两组 Foundation Swift 夹具
 bash scripts/test.sh
 # 无 Apple 工具链：仅检查工程、图标、Probe 与 Python 源码约束
 bash scripts/test.sh --source-only
@@ -52,7 +52,7 @@ bash scripts/test.sh --source-only
 bash scripts/build_widget_probe.sh
 ```
 
-版本源为 project.yml / Info.plist，当前 **0.2.2 (8)**。正式工作流只构建、签名、校验和打包主 App；校验拒绝嵌入扩展及超出最小允许列表的签名权限，打包后再次校验并生成 SHA-256。测试二进制使用系统临时目录，不写入源码树。`--source-only` 不代表 Swift 夹具运行、iOS 编译、真实签名或真机验证通过。
+版本源为 project.yml / Info.plist，当前 **0.2.2 (8)**。正式 CI 使用受支持的 macOS 15 / Xcode 16.4（macOS 14 runner 已退役），仍保留 Xcode 15 兼容工程格式／Swift 5 模式和 iOS 16.3 部署目标。正式工作流只构建、签名、校验和打包主 App；校验拒绝嵌入扩展及超出最小允许列表的签名权限，打包后再次校验并生成 SHA-256。测试二进制使用系统临时目录，不写入源码树。`--source-only` 不代表 Swift 夹具运行、iOS 编译、真实签名或真机验证通过。
 
 重置排程在冷启动、账户成功保存及回到前台时对账。仅操作 `reset-` 命名空间，串行 worker 用 generation 丢弃过期计算；独立保留原有低额通知。最多安排最近 48 个窗口，并根据其他待发通知继续减量，额外保留 8 个系统队列位置；超出容量、权限不足或排程失败会提示，延后窗口必须等下次对账，不保证 App 被杀后自动补位。通知显示仍受系统授权、专注模式和系统调度影响。
 
