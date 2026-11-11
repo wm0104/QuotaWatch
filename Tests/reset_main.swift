@@ -227,7 +227,7 @@ extension ResetNotificationTests {
         let calendar = Calendar.current
         let today = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 8))!
         metric.resetAt = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 13, minute: 26))!
-        expect(QuotaDisplayRules.resetText(metric, now: today) == "13:26 重置", "Today's reset uses precise 24-hour time")
+        expect(QuotaDisplayRules.resetText(metric, now: today) == "今天 13:26 重置", "Today's reset includes day and precise 24-hour time")
         metric.resetAt = calendar.date(from: DateComponents(year: 2026, month: 11, day: 17, hour: 9, minute: 13))!
         expect(QuotaDisplayRules.resetText(metric, now: today) == "11月17日 09:13 重置", "Later reset includes accurate date and time")
     }

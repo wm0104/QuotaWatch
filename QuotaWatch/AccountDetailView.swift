@@ -28,28 +28,30 @@ struct AccountDetailView: View {
                         DetailRefreshControl(store: store, account: account)
                         DetailStatusFooter(account: account)
                         ResetNotificationStatus(notifications: store.notifications)
-                        DisclosureGroup("额度详情", isExpanded: $quotaExpanded) {
-                            if let snapshot = account.snapshot {
-                                ForEach(QuotaDisplayRules.overviewMetrics(snapshot)) { metric in
-                                    DetailMetricRow(account: account, metric: metric,
-                                                    editRule: { editingRule = metric })
-                                }
-                            } else { Text("暂无额度数据").foregroundColor(.secondary) }
-                        }.detailDisclosureStyle()
-                        if account.kind == .codex {
-                            DisclosureGroup(isExpanded: $creditsExpanded) {
-                                CreditsDetailSection(account: account) { editingRule = $0 }
-                                Button("关于 Credits") { creditsInfo = true }.frame(minHeight: 44)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Credits")
-                                    Text(creditsSummary(account)).font(.caption).foregroundColor(.secondary)
-                                }
-                            }.detailDisclosureStyle()
+                        VStack(spacing: 0) {
+                            DisclosureGroup("额度详情", isExpanded: $quotaExpanded) {
+                                if let snapshot = account.snapshot {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ForEach(QuotaDisplayRules.overviewMetrics(snapshot)) { metric in
+                                            DetailMetricRow(account: account, metric: metric)
+                                        }
+                                    }
+                                } else { Text("暂无额度数据").foregroundColor(.secondary) }
+                            }.padding(12)
+                            if account.kind == .codex {
+                                Divider()
+                                DisclosureGroup("Credits", isExpanded: $creditsExpanded) {
+                                    CreditsDetailSection(account: account) { editingRule = $0 }
+                                    Button("关于 Credits") { creditsInfo = true }.frame(minHeight: 44)
+                                }.padding(12)
+                            }
+                            Divider()
+                            DisclosureGroup("账户信息", isExpanded: $accountExpanded) {
+                                DetailAccountCard(store: store, id: id, account: account, alias: $alias)
+                            }.padding(12)
                         }
-                        DisclosureGroup("账户信息", isExpanded: $accountExpanded) {
-                            DetailAccountCard(store: store, id: id, account: account, alias: $alias)
-                        }.detailDisclosureStyle()
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
                 }
@@ -87,13 +89,6 @@ struct AccountDetailView: View {
             editAccount = false; editingRule = nil; creditsInfo = false
             renaming = false; deleting = false
         }
-    }
-
-    private func creditsSummary(_ account: Account) -> String {
-        guard let snapshot = account.snapshot else { return "暂无数据" }
-        if snapshot.creditsAvailable == false { return "当前无可用 Credits" }
-        let value = snapshot.metrics.first { $0.unit == .credits }.map(MetricPresentation.value) ?? "余额未知"
-        return snapshot.creditsAvailable == nil ? "\(value) · 适用情况未知" : value
     }
 
     private func accountMenu(_ account: Account) -> UIMenu {
@@ -155,13 +150,6 @@ struct AccountDetailView: View {
     }
 }
 
-private extension View {
-    func detailDisclosureStyle() -> some View {
-        self.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-}
-
 private struct ResetNotificationStatus: View {
     @ObservedObject var notifications: NotificationService
     var body: some View {
@@ -179,55 +167,80 @@ private struct DetailMetricsCard: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let metrics = QuotaDisplayRules.overviewMetrics(snapshot)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
-                        count: QuotaDisplayRules.detailColumnCount(metricCount: metrics.count,
-                                                                  accessibility: typeSize.isAccessibilitySize)),
-                      alignment: .leading, spacing: 12) {
-                ForEach(metrics) { metric in
-                    let fresh = QuotaDisplayRules.isFresh(metric, account: account, now: context.date)
-                    let low = QuotaDisplayRules.isLow(metric, account: account, now: context.date)
-                    VStack(alignment: .leading, spacing: 5) {
-                        MetricValueRow(metric: metric, emphasized: fresh, detail: true, low: low, showsStatus: false)
-                        Text(QuotaDisplayRules.resetText(metric, now: context.date))
-                            .font(.caption).foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if low { Text("达到提醒阈值").font(.caption).foregroundColor(.orange) }
-                        if !fresh { Text("待刷新").font(.caption).foregroundColor(.orange) }
-                    }.accessibilityElement(children: .combine)
+            VStack(alignment: .leading, spacing: 0) {
+                if metrics.isEmpty {
+                    Text("服务未返回可展示的订阅窗口或余额。").font(.subheadline).foregroundColor(.secondary)
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        if metrics.count > 1 && !typeSize.isAccessibilitySize {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                                    if index > 0 { Text("|").foregroundColor(.secondary) }
+                                    summary(metric, now: context.date).fixedSize()
+                                }
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(metrics) { metric in summary(metric, now: context.date) }
+                        }
+                    }
                 }
-                if metrics.isEmpty { Text("服务未返回可展示的订阅窗口或余额。").font(.subheadline).foregroundColor(.secondary) }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12).background(Color(uiColor: .secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    private func summary(_ metric: QuotaMetric, now: Date) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(QuotaDisplayRules.title(metric)).font(.subheadline).foregroundColor(.secondary)
+            Spacer(minLength: 0)
+            Text(MetricPresentation.value(metric, compact: true))
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .foregroundColor(QuotaDisplayRules.isLow(metric, account: account, now: now) ? .orange :
+                    (QuotaDisplayRules.isFresh(metric, account: account, now: now) ? .primary : .secondary))
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
 
 private struct DetailMetricRow: View {
     let account: Account
     let metric: QuotaMetric
-    let editRule: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(QuotaDisplayRules.title(metric)).font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: 4) {
             TimelineView(.periodic(from: .now, by: 30)) { context in
-                Text(QuotaDisplayRules.resetText(metric, now: context.date)).font(.caption).foregroundColor(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(QuotaDisplayRules.title(metric)).fontWeight(.semibold).fixedSize()
+                        Spacer(minLength: 12)
+                        Text(QuotaDisplayRules.resetText(metric, now: context.date)).fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(QuotaDisplayRules.title(metric)).fontWeight(.semibold)
+                        Text(QuotaDisplayRules.resetText(metric, now: context.date))
+                    }
+                }.font(.subheadline)
             }
-            if account.kind == .codex && metric.unit == .percent {
-                Text(account.resetAlerts?.contains(metric.id) == true ? "重置提醒：已开启（需系统通知权限及未来时间）" : "重置提醒：关闭")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-            if let rule = account.rules.first(where: { $0.metricID == metric.id && $0.enabled }) {
-                Text("低额提醒：≤ \(MetricPresentation.number(rule.threshold)) \(metric.unit.rawValue)")
-                    .font(.caption).foregroundColor(.secondary)
-            } else { Text("低额提醒：关闭").font(.caption).foregroundColor(.secondary) }
-            if let granted = metric.granted { Text("赠金 \(MetricPresentation.number(granted))").font(.caption) }
-            if let toppedUp = metric.toppedUp { Text("充值 \(MetricPresentation.number(toppedUp))").font(.caption) }
-            if !metric.unlimited {
-                Button("设置低额提醒", action: editRule).font(.subheadline).frame(minHeight: 44)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
+            Text(reminderStatus).font(.caption).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let granted = metric.granted { Text("赠金 \(MetricPresentation.amount(granted, unit: metric.unit))").font(.caption) }
+            if let toppedUp = metric.toppedUp { Text("充值 \(MetricPresentation.amount(toppedUp, unit: metric.unit))").font(.caption) }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+    }
+
+    private var reminderStatus: String {
+        var parts: [String] = []
+        if account.kind == .codex && metric.unit == .percent && !metric.unlimited {
+            parts.append(account.resetAlerts?.contains(metric.id) == true ? "重置提醒 开" : "重置提醒 关")
+        }
+        if let rule = account.rules.first(where: { $0.metricID == metric.id && $0.enabled }) {
+            parts.append("低额提醒 开 · ≤ \(MetricPresentation.amount(rule.threshold, unit: metric.unit))")
+        } else { parts.append("低额提醒 关") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -307,67 +320,35 @@ private struct CreditsDetailSection: View {
     let editRule: (QuotaMetric) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Credits").font(.headline)
-                Spacer()
-                Text("额外用量余额").font(.caption).foregroundColor(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 6) {
             if let snapshot = account.snapshot {
                 if snapshot.creditsAvailable == false {
-                    Label("当前无可用 Credits", systemImage: "info.circle")
-                        .font(.subheadline).foregroundColor(.secondary)
-                    Text("这只表示接口当前没有报告可用的额外用量余额；不代表 5 小时或其他订阅窗口已经用尽，也不能据此判断套餐不支持额外用量。")
-                        .font(.caption).foregroundColor(.secondary)
+                    Text("当前无可用 Credits · 非订阅额度").font(.subheadline)
                     if let metric = snapshot.metrics.first(where: { $0.unit == .credits }),
                        account.rules.contains(where: { $0.metricID == metric.id && $0.enabled }) {
-                        Button("管理原 Credits 提醒规则") { editRule(metric) }
-                            .font(.subheadline).frame(minHeight: 44)
-                        Text("原规则已保留；服务未报告可用 Credits 时，不据此触发低额提醒。")
-                            .font(.caption2).foregroundColor(.secondary)
+                        Button("管理原 Credits 提醒规则") { editRule(metric) }.frame(minHeight: 44)
                     }
                 } else {
                     if let metric = snapshot.metrics.first(where: { $0.unit == .credits }) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("余额").font(.subheadline).foregroundColor(.secondary)
-                            Spacer(minLength: 12)
-                            Text(MetricPresentation.value(metric))
-                                .font(.system(.title3, design: .rounded).weight(.semibold).monospacedDigit())
-                        }
+                        Text("余额 \(MetricPresentation.value(metric, compact: true)) · 非订阅额度")
+                            .font(.subheadline.monospacedDigit())
                         if metric.remaining == 0 && !metric.unlimited {
-                            Text("Credits 余额为 0，不等于订阅额度为 0。订阅剩余情况请看上方各窗口。")
-                                .font(.caption).foregroundColor(.secondary)
+                            Text("Credits 余额为 0，不等于订阅额度为 0").font(.caption).foregroundColor(.secondary)
                         }
-                        if !metric.unlimited {
-                            Button {
-                                editRule(metric)
-                            } label: {
-                                Label("设置 Credits 提醒", systemImage: "bell")
-                                    .font(.subheadline).frame(minHeight: 44)
-                            }
-                            .buttonStyle(.plain).foregroundColor(.accentColor)
+                        if !metric.unlimited || account.rules.contains(where: { $0.metricID == metric.id }) {
+                            Button("设置 Credits 提醒") { editRule(metric) }.frame(minHeight: 44)
                         }
                     } else {
-                        Text("Credits 余额未知").font(.subheadline).foregroundColor(.secondary)
+                        Text("Credits 余额未知 · 非订阅额度").font(.subheadline)
                     }
                     if snapshot.creditsAvailable == nil {
-                        Text("适用情况未知：本次数据没有提供可用标志；若有余额，仅展示服务端报告值，请以官方用量页为准。")
-                            .font(.caption).foregroundColor(.secondary)
+                        Text("适用情况未知").font(.caption).foregroundColor(.secondary)
                     }
                 }
-                Text("这些信息对应最近一次查询，不代表实时余额。")
-                    .font(.caption2).foregroundColor(.secondary)
             } else {
-                Text("暂无 Credits 数据，请先刷新账户。")
-                    .font(.subheadline).foregroundColor(.secondary)
+                Text("暂无 Credits 数据").font(.subheadline).foregroundColor(.secondary)
             }
-            Text("Credits 是与订阅用量窗口不同的计费余额，部分套餐可购买额外用量；不是人民币、美元、token 数或剩余消息次数。")
-                .font(.caption).foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
     }
 }
 
@@ -382,39 +363,32 @@ private struct DetailAccountCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("账户").font(.footnote.weight(.semibold))
-                .foregroundColor(.secondary).textCase(.uppercase)
-            VStack(spacing: 0) {
-                DetailInfoRow(label: "平台", value: account.kind.name)
-                if let identity = account.identity {
-                    Divider().padding(.leading, 16)
-                    DetailInfoRow(label: "登录身份", value: identity)
-                }
-                if let plan = account.snapshot?.plan {
-                    Divider().padding(.leading, 16)
-                    DetailInfoRow(label: "套餐", value: plan)
-                }
-                Divider().padding(.leading, 16)
-                HStack(spacing: 10) {
-                    Text("别名").font(.subheadline).foregroundColor(.secondary)
-                    TextField("账户别名", text: $alias)
-                        .font(.subheadline)
-                        .multilineTextAlignment(.trailing)
-                    if changed {
-                        Button("保存") {
-                            do { try store.rename(id, alias: alias) }
-                            catch { store.message = store.safeMessage(error) }
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .frame(minHeight: 48)
+        VStack(spacing: 0) {
+            DetailInfoRow(label: "平台", value: account.kind.name)
+            if let identity = account.identity {
+                Divider()
+                DetailInfoRow(label: "登录身份", value: identity)
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            if let plan = account.snapshot?.plan {
+                Divider()
+                DetailInfoRow(label: "套餐", value: plan)
+            }
+            Divider()
+            HStack(spacing: 10) {
+                Text("别名").font(.subheadline).foregroundColor(.secondary)
+                TextField("账户别名", text: $alias)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.trailing)
+                if changed {
+                    Button("保存") {
+                        do { try store.rename(id, alias: alias) }
+                        catch { store.message = store.safeMessage(error) }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                }
+            }
+            .frame(minHeight: 44)
         }
     }
 }
@@ -430,8 +404,8 @@ private struct DetailInfoRow: View {
             Text(value).font(.subheadline).multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
         }
-        .padding(.horizontal, 16)
-        .frame(minHeight: 46)
+        .padding(.horizontal, 0)
+        .frame(minHeight: 44)
     }
 }
 
@@ -441,7 +415,9 @@ private struct CreditsInfoSheet: View {
         NavigationStack {
             Form {
                 Text("Credits 是与订阅用量窗口不同的计费余额，部分套餐可购买额外用量；不是人民币、美元、token 数或剩余消息次数。")
-                Text("没有可用 Credits 不等于订阅窗口已用尽，也不能据此判断套餐不支持额外用量。数据对应最近一次查询，请以官方用量页为准。")
+                Text("没有可用 Credits 只表示接口当前没有报告可用的额外用量余额，不等于订阅窗口已用尽，也不能据此判断套餐不支持额外用量。Credits 余额为 0，不等于订阅额度为 0。")
+                Text("适用情况未知表示本次数据没有提供可用标志；若有余额，仅展示服务端报告值。数据对应最近一次查询，不代表实时余额，请以官方用量页为准。")
+                Text("原提醒规则会保留；服务未报告可用 Credits 时，不据此触发低额提醒。")
             }
             .navigationTitle("关于 Credits").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }

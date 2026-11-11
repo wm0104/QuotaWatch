@@ -54,8 +54,43 @@ class UIIntegrationChecks(unittest.TestCase):
         self.assertIn('Credits 余额为 0，不等于订阅额度为 0', source)
         self.assertIn('管理原 Credits 提醒规则', source)
         self.assertNotIn('DetailProgressBar', source)
-        self.assertIn('MetricValueRow(metric: metric', source)
-        self.assertIn('QuotaDisplayRules.detailColumnCount(metricCount: metrics.count', source)
+        card = source.split('private struct DetailMetricsCard:')[1].split('private struct DetailMetricRow:')[0]
+        self.assertIn('MetricPresentation.value(metric, compact: true)', card)
+        self.assertIn('ViewThatFits(in: .horizontal)', card)
+        self.assertIn('metrics.count > 1 && !typeSize.isAccessibilitySize', card)
+        self.assertIn('ForEach(metrics)', card)
+        self.assertIn('Text("|")', card)
+        self.assertNotIn('resetText', card)
+        self.assertNotIn('ProgressView', card)
+        self.assertNotIn('剩余', card)
+
+    def test_compact_group_and_preserved_semantics(self):
+        detail = (ROOT / 'QuotaWatch/AccountDetailView.swift').read_text()
+        group = detail.split('ResetNotificationStatus(notifications: store.notifications)', 1)[1].split('.padding(.horizontal, 16)', 1)[0]
+        self.assertEqual(group.count('DisclosureGroup('), 3)
+        self.assertEqual(group.count('.background('), 1)
+        self.assertEqual(group.count('.clipShape('), 1)
+        self.assertEqual(group.count('Divider()'), 2)
+        self.assertNotIn('detailDisclosureStyle', detail)
+        for start, end in (('private struct CreditsDetailSection:', 'private struct DetailAccountCard:'),
+                           ('private struct DetailAccountCard:', 'private struct CreditsInfoSheet:')):
+            section = detail.split(start)[1].split(end)[0]
+            self.assertNotIn('.background(', section)
+            self.assertNotIn('.clipShape(', section)
+        row = detail.split('private struct DetailMetricRow:')[1].split('private struct DetailEmptyCard:')[0]
+        self.assertNotIn('Button(', row)
+        self.assertIn('MetricPresentation.amount(rule.threshold, unit: metric.unit)', row)
+        self.assertIn('重置提醒 开', row)
+        self.assertNotIn('需系统通知权限及未来时间', detail)
+        self.assertIn('notifications.resetIssue', detail)
+        self.assertIn('if changed {', detail)
+        self.assertIn('alias.trimmingCharacters(in: .whitespacesAndNewlines) != account.alias', detail)
+        self.assertIn('catch { store.message = store.safeMessage(error) }', detail)
+        presentation = (ROOT / 'QuotaWatch/OverviewView.swift').read_text().split('enum MetricPresentation {')[1]
+        for fragment in ('compact: Bool = false', 'if metric.unlimited', 'guard let remaining = metric.remaining',
+                         'unitLabel(metric.unit)', 'case .cny: return "¥', 'case .usd: return "$',
+                         'case .credits: return', 'metric.unit == .percent && !compact'):
+            self.assertIn(fragment, presentation)
 
     def test_all_existing_account_actions_are_preserved(self):
         overview = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()

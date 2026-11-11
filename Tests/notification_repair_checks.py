@@ -27,9 +27,10 @@ class NotificationRepairChecks(unittest.TestCase):
         detail = source('AccountDetailView')
         self.assertNotIn('DetailProgressBar', detail)
         self.assertNotIn('.adaptive(minimum:', detail)
-        self.assertIn('QuotaDisplayRules.detailColumnCount', detail)
+        self.assertIn('ForEach(metrics)', detail)
+        self.assertIn('metrics.count > 1 && !typeSize.isAccessibilitySize', detail)
         self.assertIn('QuotaDisplayRules.resetText', detail)
-        self.assertIn('MetricValueRow(metric:', detail)
+        self.assertIn('MetricPresentation.value(metric, compact: true)', detail)
     def test_click_cold_start_and_presentation_gate(self):
         app = source('QuotaWatchApp')
         home = source('OverviewView')

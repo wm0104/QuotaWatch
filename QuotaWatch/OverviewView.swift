@@ -257,14 +257,30 @@ enum MetricPresentation {
         formatter.maximumFractionDigits = 4
         return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "—"
     }
-    static func value(_ metric: QuotaMetric) -> String {
-        if metric.unlimited { return "不限量（服务端报告）" }
-        guard let remaining = metric.remaining else { return "未知" }
-        switch metric.unit {
-        case .percent: return "\(number(remaining))% 剩余"
-        case .cny: return "¥\(number(remaining))"
-        case .usd: return "$\(number(remaining))"
-        case .credits: return "\(number(remaining)) credits"
+    static func amount(_ value: Decimal, unit: QuotaUnit) -> String {
+        switch unit {
+        case .percent: return "\(number(value))%"
+        case .cny: return "¥\(number(value))"
+        case .usd: return "$\(number(value))"
+        case .credits: return "\(number(value)) credits"
         }
+    }
+    static func unitLabel(_ unit: QuotaUnit) -> String {
+        switch unit {
+        case .percent: return "%"
+        case .cny: return "¥"
+        case .usd: return "$"
+        case .credits: return "credits"
+        }
+    }
+    static func value(_ metric: QuotaMetric, compact: Bool = false) -> String {
+        if metric.unlimited {
+            return compact ? "不限量（\(unitLabel(metric.unit))，服务端报告）" : "不限量（服务端报告）"
+        }
+        guard let remaining = metric.remaining else {
+            return compact ? "未知 (\(unitLabel(metric.unit)))" : "未知"
+        }
+        let value = amount(remaining, unit: metric.unit)
+        return metric.unit == .percent && !compact ? value + " 剩余" : value
     }
 }

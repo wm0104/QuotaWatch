@@ -77,7 +77,7 @@ enum QuotaDisplayRules {
         let calendar = Calendar.current
         formatter.dateFormat = calendar.isDate(reset, inSameDayAs: now) ? "HH:mm" :
             (calendar.component(.year, from: reset) == calendar.component(.year, from: now) ? "M月d日 HH:mm" : "yyyy年M月d日 HH:mm")
-        return formatter.string(from: reset) + " 重置"
+        return (calendar.isDate(reset, inSameDayAs: now) ? "今天 " : "") + formatter.string(from: reset) + " 重置"
     }
 
     private static func durationTitle(_ seconds: Int) -> String {
