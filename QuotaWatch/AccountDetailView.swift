@@ -15,6 +15,7 @@ struct AccountDetailView: View {
     @State private var creditsInfo = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @ObservedObject private var route = NotificationRoute.shared
 
     var body: some View {
         Group {
@@ -80,6 +81,11 @@ struct AccountDetailView: View {
                     }
                 }
             } else { Text("账户已删除").foregroundColor(.secondary) }
+        }
+        .task(id: route.pending?.id) {
+            guard route.pending != nil, await route.waitForActivation(store: store) else { return }
+            editAccount = false; editingRule = nil; creditsInfo = false
+            renaming = false; deleting = false
         }
     }
 
@@ -173,21 +179,18 @@ private struct DetailMetricsCard: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let metrics = QuotaDisplayRules.overviewMetrics(snapshot)
-            LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible())] :
-                        [GridItem(.adaptive(minimum: 145), spacing: 12)], alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
+                        count: QuotaDisplayRules.detailColumnCount(metricCount: metrics.count,
+                                                                  accessibility: typeSize.isAccessibilitySize)),
+                      alignment: .leading, spacing: 12) {
                 ForEach(metrics) { metric in
                     let fresh = QuotaDisplayRules.isFresh(metric, account: account, now: context.date)
                     let low = QuotaDisplayRules.isLow(metric, account: account, now: context.date)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(QuotaDisplayRules.title(metric)).font(.subheadline).foregroundColor(.secondary)
-                        Text(MetricPresentation.value(metric))
-                            .font(.title3.weight(.semibold).monospacedDigit())
-                            .foregroundColor(low ? .orange : (fresh ? .primary : .secondary))
+                        MetricValueRow(metric: metric, emphasized: fresh, detail: true, low: low, showsStatus: false)
+                        Text(QuotaDisplayRules.resetText(metric, now: context.date))
+                            .font(.caption).foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        if metric.unit == .percent, !metric.unlimited, let remaining = metric.remaining {
-                            DetailProgressBar(fraction: NSDecimalNumber(decimal: remaining).doubleValue / 100,
-                                              low: low, fresh: fresh)
-                        }
                         if low { Text("达到提醒阈值").font(.caption).foregroundColor(.orange) }
                         if !fresh { Text("待刷新").font(.caption).foregroundColor(.orange) }
                     }.accessibilityElement(children: .combine)
@@ -208,9 +211,9 @@ private struct DetailMetricRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(QuotaDisplayRules.title(metric)).font(.subheadline.weight(.semibold))
-            if let reset = metric.resetAt {
-                Text("预计重置 \(DateDisplay.stamp(reset))").font(.caption).foregroundColor(.secondary)
-            } else { Text("服务端未提供可靠重置时间").font(.caption).foregroundColor(.secondary) }
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(QuotaDisplayRules.resetText(metric, now: context.date)).font(.caption).foregroundColor(.secondary)
+            }
             if account.kind == .codex && metric.unit == .percent {
                 Text(account.resetAlerts?.contains(metric.id) == true ? "重置提醒：已开启（需系统通知权限及未来时间）" : "重置提醒：关闭")
                     .font(.caption).foregroundColor(.secondary)
@@ -225,25 +228,6 @@ private struct DetailMetricRow: View {
                 Button("设置低额提醒", action: editRule).font(.subheadline).frame(minHeight: 44)
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
-    }
-}
-
-private struct DetailProgressBar: View {
-    let fraction: Double
-    let low: Bool
-    let fresh: Bool
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(uiColor: .tertiarySystemFill))
-                Capsule()
-                    .fill(low ? Color.orange : (fresh ? Color.accentColor : Color.secondary))
-                    .frame(width: CGFloat(max(0, min(1, fraction))) * geometry.size.width)
-            }
-        }
-        .frame(height: 4)
-        .animation(.easeInOut(duration: 0.25), value: fraction)
     }
 }
 

@@ -44,13 +44,30 @@ enum ResetNotificationPlanner {
                 let id = identifier(accountID: account.id, metricID: metric.id)
                 guard seen.insert(id).inserted else { continue }
                 let name = QuotaDisplayRules.title(metric)
+                    .replacingOccurrences(of: #"(\d) (小时|天|分钟|秒)"#, with: "$1$2", options: .regularExpression)
                 result.append(ResetNotificationPlan(identifier: id, accountID: account.id,
-                    metricID: metric.id, resetAt: reset, title: "\(name)额度预计重置",
-                    body: "\(account.alias) 的\(name)额度预计重置时间已到，打开查看最新额度。"))
+                    metricID: metric.id, resetAt: reset, title: "\(name)额度重置时间已到",
+                    body: "\(account.alias)：点击查看恢复后的最新额度"))
             }
         }
         return result.sorted {
             $0.resetAt == $1.resetAt ? $0.identifier < $1.identifier : $0.resetAt < $1.resetAt
         }
+    }
+}
+
+struct NotificationTap: Equatable, Identifiable {
+    let id: String
+    let accountID: UUID?
+    let deliveredAt: Date
+
+    init(identifier: String, deliveredAt: Date, userInfo: [AnyHashable: Any]) {
+        id = identifier + ":" + String(deliveredAt.timeIntervalSince1970)
+        accountID = (userInfo["accountID"] as? String).flatMap(UUID.init(uuidString:))
+        self.deliveredAt = deliveredAt
+    }
+    func destination(in accounts: [Account]) -> UUID? {
+        guard let accountID, accounts.contains(where: { $0.id == accountID }) else { return nil }
+        return accountID
     }
 }

@@ -83,7 +83,22 @@ struct RuleEditor: View {
         NavigationStack {
             Form {
                 Section(metric.title) {
-                    Toggle("低额度提醒", isOn: $enabled)
+                    Toggle("低额度提醒", isOn: Binding(get: { enabled }, set: { requested in
+                        guard requested else { enabled = false; return }
+                        Task {
+                            saving = true
+                            defer { saving = false }
+                            let revision = store.account(accountID)?.revision
+                            do {
+                                try await store.notifications.authorize()
+                                try Task.checkCancellation()
+                                guard let revision, ReminderAuthorization.canCommit(expected: revision, current: store.account(accountID)?.revision) else {
+                                    throw QuotaError.message("账户已发生变化，请重新设置提醒。")
+                                }
+                                enabled = true
+                            } catch { self.error = store.safeMessage(error) }
+                        }
+                    })).disabled(saving)
                     if enabled {
                         TextField(metric.unit == .percent ? "剩余百分比，例如 20" : "剩余金额／credits", text: $threshold)
                             .keyboardType(.decimalPad)
@@ -106,12 +121,8 @@ struct RuleEditor: View {
                                     }
                                     amount = value
                                     if metric.unit == .percent && amount > 100 { throw QuotaError.message("百分比应为 0–100。") }
-                                    if store.notifications.status == .notDetermined { try await store.notifications.authorize() }
                                 } else { amount = 0 }
                                 try await store.setRule(accountID, metricID: metric.id, enabled: enabled, threshold: amount)
-                                if enabled && !store.notifications.permitted {
-                                    store.message = "规则已保存，但系统通知未获允许；请在设置中开启。"
-                                }
                                 dismiss()
                             } catch { self.error = store.safeMessage(error) }
                         }
@@ -119,6 +130,7 @@ struct RuleEditor: View {
                 } footer: { Text("规则按账户、窗口／币种分别生效。不保证后台准时检查。") }
             }
             .navigationTitle("自定义提醒").navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(saving)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) } }
             .onAppear {
                 if let rule = store.account(accountID)?.rules.first(where: { $0.metricID == metric.id }) {

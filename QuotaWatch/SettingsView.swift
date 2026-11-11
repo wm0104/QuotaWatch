@@ -24,8 +24,11 @@ struct SettingsView: View {
             Form {
                 Section("系统通知") {
                     LabeledContent("权限", value: notificationLabel)
-                    Button("请求通知权限") {
-                        Task { do { try await notifications.authorize() } catch { self.error = "通知授权未完成。" } }
+                    Button(notifications.permitted ? "通知已允许" : "请求通知权限") {
+                        Task { do { try await notifications.authorize() } catch { self.error = error.localizedDescription } }
+                    }.disabled(notifications.status != .notDetermined)
+                    if let diagnostic = notifications.authorizationDiagnostic {
+                        Text(diagnostic).font(.caption).foregroundColor(.secondary)
                     }
                     Button("发送测试通知") {
                         Task { do { try await notifications.test() } catch { self.error = error.localizedDescription } }
@@ -37,7 +40,7 @@ struct SettingsView: View {
                     Text("前台：Codex 默认每 5 分钟、DeepSeek 每 10 分钟检查到期账户；下拉可手动刷新，30 秒防抖。")
                     Text("后台：低额提醒仅在成功查询后判断，iOS 不保证后台刷新机会；TrollStore 不等于后台常驻。")
                         .foregroundColor(.secondary)
-                    Text("重置提醒：仅按 Codex 服务端预计重置时间提交一次性系统通知。开关默认关闭，不猜周期，不代表额度已恢复；通知显示受系统权限、专注模式及调度影响。")
+                    Text("重置提醒：仅按 Codex 服务端返回的重置时间提交一次性系统通知。开关默认关闭，不猜周期，不代表额度已恢复；通知显示受系统权限、专注模式及调度影响。")
                         .foregroundColor(.secondary)
                     if let issue = notifications.resetIssue {
                         Text(issue).foregroundColor(.orange)

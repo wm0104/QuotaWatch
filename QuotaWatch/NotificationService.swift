@@ -5,17 +5,62 @@ import UserNotifications
 @MainActor
 final class NotificationService: ObservableObject {
     @Published private(set) var status: UNAuthorizationStatus = .notDetermined
-    var permitted: Bool { status == .authorized || status == .provisional || status == .ephemeral }
+    var permitted: Bool { isPermitted(status) }
+    private func isPermitted(_ value: UNAuthorizationStatus) -> Bool {
+        value == .authorized || value == .provisional || value == .ephemeral
+    }
 
-    func reload() async {
-        status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    @Published private(set) var authorizationDiagnostic: String?
+    private var authorizationTask: Task<Void, Error>?
+    private var settingsGeneration: UInt64 = 0
+
+    @discardableResult
+    func reload() async -> UNAuthorizationStatus {
+        settingsGeneration &+= 1
+        let generation = settingsGeneration
+        let value = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if generation == settingsGeneration { status = value }
+        return value
     }
     func authorize() async throws {
-        _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-        await reload()
+        if let pending = authorizationTask { try await pending.value; return }
+        let pending = Task { @MainActor in
+            let center = UNUserNotificationCenter.current()
+            let before = await self.reload()
+            self.authorizationDiagnostic = "当前系统授权状态 \(before.rawValue)"
+            if self.isPermitted(before) { return }
+            guard before == .notDetermined else {
+                if before == .denied {
+                    throw QuotaError.message("系统返回通知权限已关闭，提醒未开启。iOS 不会再次弹出允许框，请在系统设置中允许 QuotaWatch 通知。")
+                }
+                throw QuotaError.message("系统通知授权状态未知（\(before.rawValue)），提醒未开启，请稍后重试。")
+            }
+            let granted: Bool
+            do {
+                // No intermediate permission UI: iOS owns the first-time authorization prompt.
+                granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            } catch {
+                let after = await self.reload()
+                let code = (error as NSError).code
+                let domain = (error as NSError).domain == UNErrorDomain ? "UNErrorDomain" : "系统错误"
+                self.authorizationDiagnostic = "授权前 \(before.rawValue)；\(domain) 代码 \(code)；授权后 \(after.rawValue)"
+                throw QuotaError.message("系统通知授权请求失败（\(domain) \(code)），提醒未开启。可在 App 设置查看授权诊断；这不表示你拒绝过通知。")
+            }
+            let after = await self.reload()
+            self.authorizationDiagnostic = "授权前 \(before.rawValue)；系统返回 \(granted)；授权后 \(after.rawValue)"
+            guard self.isPermitted(after) else {
+                if after == .denied {
+                    throw QuotaError.message("系统返回通知权限已关闭，提醒未开启。iOS 不会再次弹出允许框，请在系统设置中允许 QuotaWatch 通知。")
+                }
+                throw QuotaError.message("系统尚未授予通知权限（状态 \(after.rawValue)），提醒未开启。请重试并查看 App 设置中的授权诊断。")
+            }
+        }
+        authorizationTask = pending
+        defer { authorizationTask = nil }
+        try await pending.value
     }
     func send(account: Account, stillValid: () -> Bool) async throws -> Bool {
-        await reload()
+        let permitted = isPermitted(await reload())
         guard permitted, stillValid() else { return false }
         let content = UNMutableNotificationContent()
         content.title = "额度提醒"
@@ -50,7 +95,7 @@ final class NotificationService: ObservableObject {
 
     private func reconcileResetPass(accounts: [Account], generation: UInt64) async {
         let center = UNUserNotificationCenter.current()
-        await reload()
+        let permitted = isPermitted(await reload())
         let pending = await center.pendingNotificationRequests()
         let delivered = await center.deliveredNotifications()
         guard generation == resetGeneration else { return }
@@ -95,11 +140,11 @@ final class NotificationService: ObservableObject {
     }
 
     func test() async throws {
-        await reload()
+        let permitted = isPermitted(await reload())
         guard permitted else { throw QuotaError.message("请先允许系统通知。") }
         let content = UNMutableNotificationContent()
         content.title = "QuotaWatch 测试通知"
-        content.body = "通知请求已提交。低额提醒在成功查询后判断；重置提醒仅按服务端预计时间排程。"
+        content.body = "通知请求已提交。低额提醒在成功查询后判断；重置提醒仅按服务端返回时间排程。"
         content.sound = .default
         try await UNUserNotificationCenter.current().add(UNNotificationRequest(
             identifier: "test", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))

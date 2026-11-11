@@ -59,8 +59,9 @@ struct ResetNotificationTests {
         let low = AlertEvaluator.evaluate(snapshot: a.snapshot!, rules: a.rules, latched: [], interval: 300, now: now)
         expect(low.notify == [primary], "Low-alert evaluation remains independent")
         expect(original[0].resetAt < original[1].resetAt, "Earliest first")
-        expect(original[0].title.contains("5 小时"), "Uses real window title")
-        expect(original[0].body.contains("预计重置时间已到") && !original[0].body.contains("100%"), "No recovery guarantee")
+        expect(original[0].title.contains("5小时"), "Uses real window title")
+        expect(original[0].title == "5小时额度重置时间已到", "Title reports only the server reset time")
+        expect(original[0].body == "合成账户：点击查看恢复后的最新额度" && !original[0].body.contains("100%"), "Click to query, no recovery guarantee")
         expect(plans([a], permitted: false).isEmpty, "No permission no schedules")
         expect(plans([a, a]) == original, "Duplicate accounts do not duplicate requests")
         a.snapshot!.metrics.append(a.snapshot!.metrics[0])
@@ -149,6 +150,85 @@ struct ResetNotificationTests {
         expect(ResetNotificationPlanner.enabledIdentifiers([many]).count == 70, "Delivered opt-in ownership independent of queue truncation")
         many.resetAlerts = []
         expect(plans([many]).isEmpty && ResetNotificationPlanner.enabledIdentifiers([many]).isEmpty, "All off clears pending and delivered")
+        repairFixtures()
         print("PASS: \(checks) reset notification checks (synthetic Foundation fixtures; no delivery)")
+    }
+}
+
+extension ResetNotificationTests {
+    static func repairFixtures() {
+        for count in [0, 1, 2, 3, 7] {
+            expect(QuotaDisplayRules.detailColumnCount(metricCount: count, accessibility: false) == (count <= 1 ? 1 : 2), "Layout follows actual window count, never plan")
+            expect(QuotaDisplayRules.detailColumnCount(metricCount: count, accessibility: true) == 1, "Accessibility stacks every window")
+        }
+        var a = account()
+        let revision = a.revision
+        expect(ReminderAuthorization.canCommit(expected: revision, current: revision), "Same account revision can commit after authorization")
+        expect(!ReminderAuthorization.canCommit(expected: revision, current: UUID()), "Rename/relogin/rule change rejects suspended authorization")
+        expect(!ReminderAuthorization.canCommit(expected: revision, current: nil), "Deleted account cannot be recreated by permission completion")
+        let tap = NotificationTap(identifier: "reset-fixture", deliveredAt: now, userInfo: ["accountID": a.id.uuidString])
+        expect(tap.destination(in: [a]) == a.id, "Notification resolves its own account ID")
+        expect(tap.destination(in: []) == nil, "Deleted target safely routes home")
+        let other = account()
+        expect(tap.destination(in: [other]) == nil, "Never substitute another account")
+        let invalid = NotificationTap(identifier: "low-fixture", deliveredAt: now, userInfo: ["accountID": "invalid"])
+        expect(invalid.accountID == nil && invalid.destination(in: [a]) == nil, "Malformed target routes home")
+        let missing = NotificationTap(identifier: "test", deliveredAt: now, userInfo: [:])
+        expect(missing.destination(in: [a]) == nil, "Test notification has no account")
+        expect(tap.id == NotificationTap(identifier: "reset-fixture", deliveredAt: now, userInfo: [:]).id, "Repeated callback has same delivery key")
+        expect(tap.id != NotificationTap(identifier: "reset-fixture", deliveredAt: now.addingTimeInterval(1), userInfo: [:]).id, "New delivery of same request is independent")
+
+        a.snapshot!.capturedAt = now.addingTimeInterval(-120)
+        a.snapshot!.metrics[0].resetAt = now
+        a.lastAttempt = now.addingTimeInterval(-5)
+        expect(QuotaRefreshPolicy.hasUnobservedReset(a, now: now), "Expired old window detected on ordinary open")
+        expect(QuotaRefreshPolicy.allows(a, forced: false, now: now), "Newly due reset bypasses 5-minute interval")
+        a.nextAllowedAt = now.addingTimeInterval(120)
+        expect(!QuotaRefreshPolicy.allows(a, forced: false, now: now), "Due reset respects server Retry-After")
+        expect(!QuotaRefreshPolicy.allows(a, forced: true, notificationAt: now, now: now), "Notification cannot bypass server limit")
+        a.nextAllowedAt = now
+        a.requiresAuth = true
+        expect(!QuotaRefreshPolicy.allows(a, forced: true, notificationAt: now, now: now), "Notification cannot bypass invalid authentication")
+        a.requiresAuth = false
+        a.error = "合成网络失败"
+        expect(!QuotaRefreshPolicy.allows(a, forced: false, now: now), "Past Retry-After still has failure backoff")
+        expect(!QuotaRefreshPolicy.allows(a, forced: true, notificationAt: now, now: now), "Repeated taps do not bypass failure backoff")
+        for seconds in [30.0, 60, 120, 240] {
+            expect(!QuotaRefreshPolicy.allows(a, forced: false, now: now.addingTimeInterval(seconds)), "Failed old reset never retries every timer tick")
+        }
+        expect(QuotaRefreshPolicy.allows(a, forced: true, now: now.addingTimeInterval(30)), "Manual retry retains 30-second debounce after server limit expires")
+        expect(QuotaRefreshPolicy.allows(a, forced: false, now: now.addingTimeInterval(300)), "Failure retries only after backoff")
+        a.error = nil
+        a.nextAllowedAt = nil
+        a.lastAttempt = now
+        a.snapshot!.capturedAt = now.addingTimeInterval(1)
+        expect(!QuotaRefreshPolicy.hasUnobservedReset(a, now: now.addingTimeInterval(1)), "Success with same past reset consumes immediate reset check")
+        for seconds in [30.0, 60, 90, 120, 240] {
+            expect(!QuotaRefreshPolicy.allows(a, forced: false, now: now.addingTimeInterval(seconds)), "Same old reset never creates 30/60-second loop")
+        }
+        expect(a.snapshot!.metrics[0].remaining == 25, "Clock crossing never invents 100 percent")
+        expect(QuotaRefreshPolicy.allows(a, forced: false, now: now.addingTimeInterval(300)), "Ordinary interval remains available")
+        expect(!QuotaRefreshPolicy.allows(a, forced: true, notificationAt: now, now: now.addingTimeInterval(2)), "Foreground success after delivery deduplicates tap refresh")
+        expect(QuotaRefreshPolicy.allows(a, forced: false, notificationAt: now.addingTimeInterval(2), now: now.addingTimeInterval(2)), "New tap queries even within normal interval")
+        a.snapshot!.metrics[0].resetAt = nil
+        expect(!QuotaRefreshPolicy.hasUnobservedReset(a, now: now), "Unknown time never guesses a reset")
+        a.snapshot!.metrics[0].resetAt = now.addingTimeInterval(2)
+        expect(QuotaRefreshPolicy.nextCheckDelay([a], now: now) == 2, "Foreground wakes at real reset time")
+        a.snapshot!.metrics[0].resetAt = now.addingTimeInterval(-2)
+        expect(QuotaRefreshPolicy.nextCheckDelay([a], now: now) == 60, "Past reset cannot busy-loop the timer")
+        a.snapshot!.metrics[0].unlimited = true
+        expect(!QuotaRefreshPolicy.hasUnobservedReset(a, now: now), "Unlimited window never infers recovery")
+
+        var metric = a.snapshot!.metrics[0]
+        metric.resetAt = now
+        expect(QuotaDisplayRules.resetText(metric, now: now) == "重置时间已到，等待刷新", "Reached reset shows waiting, not restored")
+        metric.resetAt = nil
+        expect(QuotaDisplayRules.resetText(metric, now: now) == "服务端未提供可靠重置时间", "Missing time remains unknown")
+        let calendar = Calendar.current
+        let today = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 8))!
+        metric.resetAt = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 13, minute: 26))!
+        expect(QuotaDisplayRules.resetText(metric, now: today) == "13:26 重置", "Today's reset uses precise 24-hour time")
+        metric.resetAt = calendar.date(from: DateComponents(year: 2026, month: 11, day: 17, hour: 9, minute: 13))!
+        expect(QuotaDisplayRules.resetText(metric, now: today) == "11月17日 09:13 重置", "Later reset includes accurate date and time")
     }
 }

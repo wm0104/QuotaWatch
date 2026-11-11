@@ -6,9 +6,11 @@ struct OverviewView: View {
     @State private var adding = false
     @State private var settings = false
     @State private var deleteID: UUID?
+    @State private var path: [UUID] = []
+    @ObservedObject private var route = NotificationRoute.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 if let error = store.loadError {
                     Section {
@@ -33,9 +35,7 @@ struct OverviewView: View {
                     if !items.isEmpty {
                         Section {
                             ForEach(items) { account in
-                                NavigationLink {
-                                    AccountDetailView(store: store, id: account.id)
-                                } label: {
+                                NavigationLink(value: account.id) {
                                     AccountSummary(account: account, refreshing: store.busy.contains(account.id))
                                 }
                                 .swipeActions(edge: .trailing) {
@@ -60,11 +60,12 @@ struct OverviewView: View {
                     }
                 }
                 Section { } footer: {
-                    Label("低额提醒在成功查询后判断；重置提醒按服务端预计时间排程，均不保证准时。", systemImage: "info.circle")
+                    Label("低额提醒在成功查询后判断；重置提醒按服务端返回时间排程，均不保证准时。", systemImage: "info.circle")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
             .navigationTitle("QuotaWatch")
+            .navigationDestination(for: UUID.self) { id in AccountDetailView(store: store, id: id) }
             .navigationBarTitleDisplayMode(.inline)
             .listStyle(.insetGrouped)
             .refreshable { await store.refreshAll(forced: true) }
@@ -97,6 +98,19 @@ struct OverviewView: View {
             .alert("提示", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
                 Button("知道了", role: .cancel) { store.message = nil }
             } message: { Text(store.message ?? "") }
+        }
+        .onChange(of: store.accounts.map(\.id)) { ids in
+            if path.contains(where: { !ids.contains($0) }) { path = [] }
+        }
+        .task(id: route.pending?.id) {
+            guard let event = route.pending, await route.waitForActivation(store: store) else { return }
+            adding = false; settings = false; deleteID = nil; store.message = nil
+            guard await route.waitForDismissal(), route.pending?.id == event.id else { return }
+            if let id = event.destination(in: store.accounts) {
+                path = [id]
+                await store.refresh(id, notificationAt: event.deliveredAt)
+            } else { path = [] }
+            route.finish(event)
         }
     }
 }
@@ -196,6 +210,7 @@ struct MetricValueRow: View {
     var detail = false
     var low = false
     var pendingRefresh = false
+    var showsStatus = true
     @Environment(\.dynamicTypeSize) private var typeSize
     private var amount: some View {
         Text(MetricPresentation.value(metric))
@@ -224,10 +239,10 @@ struct MetricValueRow: View {
                     }
                 }
             }
-            if low {
+            if low && showsStatus {
                 Label("达到提醒阈值", systemImage: "exclamationmark.circle.fill")
                     .font(.caption).foregroundColor(.orange)
-            } else if pendingRefresh {
+            } else if pendingRefresh && showsStatus {
                 Label("待刷新", systemImage: "clock")
                     .font(.caption).foregroundColor(.secondary)
             }

@@ -11,6 +11,7 @@ final class AccountStore: ObservableObject {
     let notifications = NotificationService()
     private var jobs: [UUID: (marker: UUID, task: Task<Void, Never>)] = [:]
     private var refreshAllRunning = false
+    private(set) var accountEditsInFlight = 0
 
     init() { reloadArchive() }
 
@@ -48,6 +49,8 @@ final class AccountStore: ObservableObject {
     func cancelRefreshes() { for id in Array(jobs.keys) { cancel(id) } }
 
     func add(kind: ProviderKind, alias: String, key: String = "", replacing id: UUID? = nil) async throws {
+        accountEditsInFlight += 1
+        defer { accountEditsInFlight -= 1 }
         guard loadError == nil else { throw QuotaError.message("请先恢复本地数据读取。") }
         let name = alias.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 64 else { throw QuotaError.message("请输入 1–64 字的账户别名。") }
@@ -134,9 +137,16 @@ final class AccountStore: ObservableObject {
         notifications.remove(accountID: id)
     }
     func setRule(_ id: UUID, metricID: String, enabled: Bool, threshold: Decimal) async throws {
-        guard var value = account(id), let metric = value.snapshot?.metrics.first(where: { $0.id == metricID }),
+        guard let initial = account(id), let metric = initial.snapshot?.metrics.first(where: { $0.id == metricID }),
               threshold >= 0, !threshold.isNaN,
               metric.unit != .percent || threshold <= 100 else { throw QuotaError.message("阈值无效。") }
+        if enabled { try await notifications.authorize() }
+        try Task.checkCancellation()
+        guard var value = account(id), ReminderAuthorization.canCommit(expected: initial.revision, current: value.revision),
+              let currentMetric = value.snapshot?.metrics.first(where: { $0.id == metricID }),
+              currentMetric.unit == metric.unit, !enabled || !currentMetric.unlimited else {
+            throw QuotaError.message("账户或窗口已发生变化，请重新设置提醒。")
+        }
         cancel(id)
         value.rules.removeAll { $0.metricID == metricID }
         if enabled { value.rules.append(AlertRule(metricID: metricID, threshold: threshold)) }
@@ -165,13 +175,11 @@ final class AccountStore: ObservableObject {
               !enabled || initial.snapshot?.metrics.contains(where: { $0.id == metricID && $0.unit == .percent && !$0.unlimited }) == true else {
             throw QuotaError.message("此窗口不支持重置提醒。")
         }
-        if enabled {
-            await notifications.reload()
-            if notifications.status == .notDetermined { try await notifications.authorize() }
-            guard notifications.permitted else { throw QuotaError.message("系统通知未获允许，重置提醒未开启；请在设置中允许通知。") }
-        }
-        guard var current = account(id), current.revision == initial.revision else {
-            throw QuotaError.message("账户已发生变化，请重新设置提醒。")
+        if enabled { try await notifications.authorize() }
+        try Task.checkCancellation()
+        guard var current = account(id), current.revision == initial.revision,
+              !enabled || current.snapshot?.metrics.contains(where: { $0.id == metricID && $0.unit == .percent && !$0.unlimited }) == true else {
+            throw QuotaError.message("账户或窗口已发生变化，请重新设置提醒。")
         }
         cancel(id)
         var rules = current.resetAlerts ?? []
@@ -184,13 +192,15 @@ final class AccountStore: ObservableObject {
         }
     }
 
-    func refresh(_ id: UUID, forced: Bool = false) async {
-        guard loadError == nil, let value = account(id), jobs[id] == nil, busy.count < 2 else { return }
-        let now = Date()
-        guard value.nextAllowedAt.map({ $0 <= now }) ?? true else { return }
-        guard !value.requiresAuth else { return }
-        let interval = forced ? 30.0 : value.kind.interval
-        guard value.lastAttempt.map({ now.timeIntervalSince($0) >= interval }) ?? true else { return }
+    func refresh(_ id: UUID, forced: Bool = false, notificationAt: Date? = nil) async {
+        if notificationAt != nil {
+            // A tapped account must not be dropped just because two other accounts occupy the slots.
+            while jobs[id] != nil || busy.count >= 2 {
+                do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
+            }
+        }
+        guard !Task.isCancelled, loadError == nil, let value = account(id), jobs[id] == nil, busy.count < 2 else { return }
+        guard QuotaRefreshPolicy.allows(value, forced: forced, notificationAt: notificationAt, now: Date()) else { return }
         let marker = UUID()
         let task = Task { await self.performRefresh(id, revision: value.revision) }
         jobs[id] = (marker, task)

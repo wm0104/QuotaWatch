@@ -53,7 +53,9 @@ class UIIntegrationChecks(unittest.TestCase):
         self.assertIn('不能据此判断套餐不支持', source)
         self.assertIn('Credits 余额为 0，不等于订阅额度为 0', source)
         self.assertIn('管理原 Credits 提醒规则', source)
-        self.assertIn('DetailProgressBar', source)
+        self.assertNotIn('DetailProgressBar', source)
+        self.assertIn('MetricValueRow(metric: metric', source)
+        self.assertIn('QuotaDisplayRules.detailColumnCount(metricCount: metrics.count', source)
 
     def test_all_existing_account_actions_are_preserved(self):
         overview = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()
