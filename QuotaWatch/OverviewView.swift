@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OverviewView: View {
     @ObservedObject var store: AccountStore
@@ -58,10 +59,8 @@ struct OverviewView: View {
                         }
                     }
                 }
-                Section {
-                    EmptyView()
-                } footer: {
-                    Label("成功查询后判断低额提醒；后台由 iOS 择机检查，不保证准点。", systemImage: "info.circle")
+                Section { } footer: {
+                    Label("低额提醒在成功查询后判断；重置提醒按服务端预计时间排程，均不保证准时。", systemImage: "info.circle")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
@@ -70,9 +69,16 @@ struct OverviewView: View {
             .listStyle(.insetGrouped)
             .refreshable { await store.refreshAll(forced: true) }
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button { settings = true } label: { Image(systemName: "gearshape") }
-                        .accessibilityLabel("设置与通知权限")
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NativeMenuButton(accessibilityLabel: "更多操作") {
+                        UIMenu(children: [
+                            UIAction(title: "刷新全部", image: UIImage(systemName: "arrow.clockwise"),
+                                     attributes: store.loadError == nil ? [] : .disabled) { _ in
+                                Task { await store.refreshAll(forced: true) }
+                            },
+                            UIAction(title: "设置", image: UIImage(systemName: "gearshape")) { _ in settings = true }
+                        ])
+                    }.frame(width: 44, height: 44)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { adding = true } label: { Image(systemName: "plus") }
@@ -98,41 +104,88 @@ struct OverviewView: View {
 struct AccountSummary: View {
     let account: Account
     let refreshing: Bool
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Text(account.alias).font(.headline).foregroundColor(.primary)
-                    Spacer(minLength: 0)
-                    if refreshing { ProgressView().controlSize(.small).accessibilityLabel("正在刷新") }
-                    else if account.requiresAuth {
-                        Image(systemName: "person.crop.circle.badge.exclamationmark")
-                            .foregroundColor(.orange).accessibilityLabel("需要重新登录")
-                    }
-                }
+            VStack(alignment: .leading, spacing: 4) {
                 if let snapshot = account.snapshot {
                     let metrics = QuotaDisplayRules.overviewMetrics(snapshot)
-                    ForEach(metrics) { metric in
-                        let fresh = QuotaDisplayRules.isFresh(metric, account: account, now: context.date)
-                        MetricValueRow(metric: metric, emphasized: fresh,
-                                       low: QuotaDisplayRules.isLow(metric, account: account, now: context.date),
-                                       pendingRefresh: !fresh)
+                    if account.kind == .deepseek, let first = metrics.first {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(account.alias).font(.headline).fixedSize()
+                                Spacer(minLength: 8)
+                                Text(MetricPresentation.value(first)).font(.headline.monospacedDigit()).fixedSize()
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(account.alias).font(.headline)
+                                Text(MetricPresentation.value(first)).font(.headline.monospacedDigit())
+                            }
+                        }
+                        Text("\(QuotaDisplayRules.title(first)) · \(DateDisplay.short(snapshot.capturedAt))")
+                            .font(.caption).foregroundColor(.secondary)
+                        ForEach(Array(metrics.dropFirst())) { metric in
+                            MetricValueRow(metric: metric,
+                                emphasized: QuotaDisplayRules.isFresh(metric, account: account, now: context.date),
+                                low: QuotaDisplayRules.isLow(metric, account: account, now: context.date))
+                        }
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(account.alias).font(.headline).fixedSize()
+                                Spacer(minLength: 0)
+                                HStack(spacing: 5) {
+                                    ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                                        if index > 0 { Text("·").foregroundColor(.secondary) }
+                                        Text("\(QuotaDisplayRules.title(metric)) \(MetricPresentation.value(metric))")
+                                            .foregroundColor(QuotaDisplayRules.isLow(metric, account: account, now: context.date) ? .orange :
+                                                (QuotaDisplayRules.isFresh(metric, account: account, now: context.date) ? .primary : .secondary))
+                                            .fixedSize()
+                                    }
+                                }.font(.subheadline.monospacedDigit())
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(account.alias).font(.headline)
+                                metricRows(metrics, now: context.date)
+                            }
+                        }
+                        Text(DateDisplay.short(snapshot.capturedAt)).font(.caption).foregroundColor(.secondary)
                     }
                     if metrics.isEmpty {
                         Text(account.kind == .codex ? "暂无订阅窗口，Credits 请查看详情" : "服务未返回可展示的余额")
                             .font(.footnote).foregroundColor(.secondary)
                     }
-                    let stale = QuotaDisplayRules.needsRefresh(account, now: context.date)
-                    Label(stale ? "数据已过期／待刷新" : "更新于 \(DateDisplay.stamp(snapshot.capturedAt))",
-                          systemImage: stale ? "exclamationmark.circle" : "clock")
-                        .font(.caption).foregroundColor(stale ? .orange : .secondary)
+                    if metrics.contains(where: { QuotaDisplayRules.isLow($0, account: account, now: context.date) }) {
+                        Label("达到提醒阈值", systemImage: "exclamationmark.circle.fill")
+                            .font(.caption).foregroundColor(.orange)
+                    }
+                    if QuotaDisplayRules.needsRefresh(account, now: context.date) {
+                        Label("数据已过期／待刷新", systemImage: "exclamationmark.circle")
+                            .font(.caption).foregroundColor(.orange)
+                    }
                 } else {
+                    Text(account.alias).font(.headline)
                     Text("暂无数据").font(.subheadline).foregroundColor(.secondary)
+                }
+                if refreshing { Label("正在刷新", systemImage: "arrow.clockwise").font(.caption).foregroundColor(.secondary) }
+                if account.requiresAuth {
+                    Label("需要重新登录或更换密钥", systemImage: "person.crop.circle.badge.exclamationmark")
+                        .font(.caption).foregroundColor(.orange)
                 }
                 if let error = account.error {
                     Text(error).font(.caption).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true)
                 }
-            }.padding(.vertical, 8)
+            }.padding(.vertical, 2)
+        }
+    }
+
+    private func metricRows(_ metrics: [QuotaMetric], now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(metrics) { metric in
+                MetricValueRow(metric: metric,
+                    emphasized: QuotaDisplayRules.isFresh(metric, account: account, now: now),
+                    low: QuotaDisplayRules.isLow(metric, account: account, now: now))
+            }
         }
     }
 }
@@ -146,7 +199,7 @@ struct MetricValueRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     private var amount: some View {
         Text(MetricPresentation.value(metric))
-            .font((detail ? Font.title2 : Font.title3).weight(.semibold).monospacedDigit())
+            .font((detail ? Font.title2 : Font.subheadline).weight(.semibold).monospacedDigit())
             .foregroundColor(low ? .orange : (emphasized ? .primary : .secondary))
             .fixedSize(horizontal: false, vertical: true)
     }

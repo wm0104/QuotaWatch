@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the signed app and its embedded WidgetKit extension (macOS only)."""
+"""Verify the signed app with no embedded extensions (macOS only)."""
 import plistlib
 import re
 import subprocess
@@ -7,8 +7,7 @@ import sys
 from pathlib import Path
 
 from check_project import (
-    APP_ENTITLEMENTS, APP_GROUP, BUNDLE_ID, MIN_OS, NAME, VERSION,
-    WIDGET_ENTITLEMENTS, WIDGET_ID, check_info, check_widget_info, require,
+    APP_ENTITLEMENTS, BUNDLE_ID, MIN_OS, NAME, VERSION, check_info, require,
 )
 
 
@@ -16,13 +15,10 @@ def output(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
-def verify_bundle(bundle, executable_name, bundle_id, expected_entitlements, widget=False):
+def verify_bundle(bundle, executable_name, bundle_id, expected_entitlements):
     with (bundle / "Info.plist").open("rb") as stream:
         info = plistlib.load(stream)
-    if widget:
-        check_widget_info(info, built=True)
-    else:
-        check_info(info, built=True)
+    check_info(info, built=True)
     executable = bundle / executable_name
     require(executable.is_file(), "Missing executable: " + executable_name)
     require(not (bundle / "embedded.mobileprovision").exists(),
@@ -59,16 +55,12 @@ def main():
     require(bool(primary.get("CFBundleIconFiles")), "Missing compiled icon files")
 
     plugins = app / "PlugIns"
-    require(plugins.is_dir(), "Missing extension PlugIns directory")
-    extensions = sorted(plugins.glob("*.appex"))
-    require([p.name for p in extensions] == ["QuotaWatchWidget.appex"],
-            "Expected exactly one QuotaWatchWidget.appex")
-    extension = extensions[0]
-    verify_bundle(extension, "QuotaWatchWidget", WIDGET_ID, WIDGET_ENTITLEMENTS, widget=True)
+    require(not plugins.exists() or not any(plugins.iterdir()),
+            "Formal app must not embed extensions or other PlugIns")
     verify_bundle(app, "QuotaWatch", BUNDLE_ID, APP_ENTITLEMENTS)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)],
                    check=True)
-    print("Verified: QuotaWatch 0.2.2 (8) + QuotaWatchWidget, iOS 16.3, arm64, "
+    print("Verified: QuotaWatch 0.2.2 (8), iOS 16.3, arm64, "
           "isolated minimal entitlements")
 
 

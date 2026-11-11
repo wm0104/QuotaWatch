@@ -65,5 +65,78 @@ class UIIntegrationChecks(unittest.TestCase):
             self.assertIn(fragment, detail)
 
 
+    def test_uikit_menus_and_independent_disclosures(self):
+        bridge = (ROOT / 'QuotaWatch/NativeMenuButton.swift').read_text()
+        detail = (ROOT / 'QuotaWatch/AccountDetailView.swift').read_text()
+        overview = (ROOT / 'QuotaWatch/OverviewView.swift').read_text()
+        for fragment in ('UIViewRepresentable', 'UIButton(type: .system)',
+                         'showsMenuAsPrimaryAction = true', 'button.menu = menu()',
+                         'button.accessibilityLabel = accessibilityLabel'):
+            self.assertIn(fragment, bridge)
+        for source in (detail, overview):
+            self.assertIn('NativeMenuButton(accessibilityLabel:', source)
+            self.assertIn('UIMenu(children:', source)
+            self.assertNotIn('.displayInline', source)
+            self.assertNotRegex(source, r'(?<![A-Za-z])Menu\s*[({]')
+        for state in ('quotaExpanded', 'creditsExpanded', 'accountExpanded'):
+            self.assertIn(f'@State private var {state} = false', detail)
+            self.assertIn(f'isExpanded: ${state}', detail)
+        for title in ('提醒设置', '账户管理'):
+            self.assertIn(f'UIMenu(title: "{title}"', detail)
+        self.assertIn('state: enabled ? .on : .off', detail)
+        self.assertIn('attributes: .destructive', detail)
+        self.assertIn('.confirmationDialog(', detail)
+        self.assertIn('CreditsInfoSheet()', detail)
+        self.assertIn('if account.kind == .codex {', detail)
+        self.assertIn('.fixedSize(horizontal: false, vertical: true).textSelection(.enabled)', detail)
+        self.assertNotIn('DetailActionsCard', detail)
+        self.assertNotIn('.borderedProminent', detail)
+        self.assertIn('DetailRefreshControl(store: store, account: account)', detail)
+        self.assertIn('DetailStatusFooter(account: account)', detail)
+        self.assertIn('.refreshable { await store.refreshAll(forced: true) }', overview)
+        self.assertIn('.swipeActions(edge: .trailing)', overview)
+        self.assertIn('Button { adding = true } label: { Image(systemName: "plus") }', overview)
+        self.assertIn('ForEach(Array(metrics.dropFirst()))', overview)
+        self.assertIn('ForEach(Array(metrics.enumerated()), id: \\.element.id)', overview)
+        self.assertIn('HStack(alignment: .firstTextBaseline, spacing: 8)', overview)
+        # The fallback is wrap/stack, never a one-line truncation or hidden metric cap.
+        self.assertNotIn('.lineLimit(1)', overview)
+        self.assertNotIn('metrics.prefix(', overview)
+
+    def test_reset_lifecycle_and_serialized_worker_guards(self):
+        store = (ROOT / 'QuotaWatch/AccountStore.swift').read_text()
+        service = (ROOT / 'QuotaWatch/NotificationService.swift').read_text()
+        planner = (ROOT / 'QuotaWatch/ResetNotificationPlanner.swift').read_text()
+        app = (ROOT / 'QuotaWatch/QuotaWatchApp.swift').read_text()
+        self.assertIn('current.revision == initial.revision', store)
+        self.assertIn('previous.remoteID != credential.accountID || previous.identity != credential.identity', store)
+        self.assertIn('value.resetAlerts = nil', store)
+        self.assertIn('try LocalArchive.save(list)\n            accounts = list\n            notifications.reconcileResets(accounts: list)', store)
+        self.assertIn('notifications.reconcileResets(accounts: accounts)', store)
+        self.assertIn('store.reconcileResetNotifications()', app)
+        self.assertIn('guard resetWorker == nil else { return }', service)
+        self.assertIn('if generation == resetGeneration { break }', service)
+        self.assertGreaterEqual(service.count('guard generation == resetGeneration else { return }'), 2)
+        self.assertIn('resetGeneration &+= 1', service)
+        self.assertIn('pending.count - owned.count', service)
+        self.assertIn('candidates.count > plans.count', service)
+        self.assertIn('!desired.contains($0)', service)
+        self.assertIn('!enabled.contains($0)', service)
+        self.assertIn('center.removePendingNotificationRequests(withIdentifiers: [plan.identifier])', service)
+        self.assertIn('repeats: false', service)
+        self.assertNotIn('repeats: true', service)
+        self.assertIn('existing.content.userInfo["resetAt"] as? Double', service)
+        self.assertIn('系统通知未获允许', service)
+        self.assertIn('排程失败', service)
+        self.assertIn('reset > now, reset > snapshot.capturedAt', planner)
+        self.assertIn('reset.timeIntervalSince1970.isFinite', planner)
+        self.assertIn('!account.requiresAuth', planner)
+        self.assertNotIn('account.error == nil', planner)  # transient network errors retain schedules
+        self.assertNotIn('durationSeconds', planner)  # no reset guesswork
+        self.assertIn('56 - max(0, otherPending)', planner)
+        self.assertIn('identifier: "low-\\(account.id.uuidString)"', service)
+        self.assertIn('AlertEvaluator.evaluate', store)  # independent old low-alert path retained
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

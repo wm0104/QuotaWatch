@@ -35,8 +35,13 @@ struct SettingsView: View {
                 Section("刷新方式") {
                     LabeledContent("后台刷新", value: backgroundStatus == .available ? "系统允许，执行时间不保证" : "不可用／已关闭")
                     Text("前台：Codex 默认每 5 分钟、DeepSeek 每 10 分钟检查到期账户；下拉可手动刷新，30 秒防抖。")
-                    Text("后台：仅向 iOS 申请刷新机会。关闭 App、低电量、系统调度或通知权限可能影响提醒；TrollStore 不等于后台常驻。")
+                    Text("后台：低额提醒仅在成功查询后判断，iOS 不保证后台刷新机会；TrollStore 不等于后台常驻。")
                         .foregroundColor(.secondary)
+                    Text("重置提醒：仅按 Codex 服务端预计重置时间提交一次性系统通知。开关默认关闭，不猜周期，不代表额度已恢复；通知显示受系统权限、专注模式及调度影响。")
+                        .foregroundColor(.secondary)
+                    if let issue = notifications.resetIssue {
+                        Text(issue).foregroundColor(.orange)
+                    }
                 }.font(.subheadline)
                 Section("隐私与限制") {
                     Label("凭据只进本机钥匙串，不上传至开发者服务器。", systemImage: "lock.shield")
@@ -46,7 +51,7 @@ struct SettingsView: View {
                 Section("关于") {
                     LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
                     Link("公开源码与问题反馈", destination: URL(string: "https://github.com/wm0104/QuotaWatch")!)
-                    Text("首个测试版：需要使用你自己的账号进行登录和真机验证。")
+                    Text("请使用自己的账号验收登录、额度与通知；固定样例和源码检查不等于真机验证。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }

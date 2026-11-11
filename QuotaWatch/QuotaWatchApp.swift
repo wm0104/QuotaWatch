@@ -15,6 +15,7 @@ struct QuotaWatchApp: App {
                     BackgroundRefresh.store = store
                     if phase == .active {
                         await store.notifications.reload()
+                        store.reconcileResetNotifications()
                         while !Task.isCancelled {
                             await store.refreshAll()
                             do { try await Task.sleep(nanoseconds: 60_000_000_000) }

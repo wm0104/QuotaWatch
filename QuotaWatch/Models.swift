@@ -66,6 +66,9 @@ struct Account: Codable, Identifiable, Equatable {
     var identity: String? = nil
     var snapshot: QuotaSnapshot? = nil
     var rules: [AlertRule] = []
+    // Optional for synthesized Codable compatibility with archives written before 0.2.2.
+    // A missing field means every reset reminder is off.
+    var resetAlerts: Set<String>? = nil
     var latched: Set<String> = []
     var error: String? = nil
     var lastAttempt: Date? = nil

@@ -8,10 +8,6 @@
     <array>
         <string>com.wm0104.quotawatch</string>
     </array>
-    <key>com.apple.security.application-groups</key>
-    <array>
-        <string>group.com.wm0104.quotawatch</string>
-    </array>
     <key>get-task-allow</key>
     <false/>
 </dict>

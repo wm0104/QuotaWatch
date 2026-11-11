@@ -19,7 +19,7 @@ final class AccountStore: ObservableObject {
         do {
             accounts = try LocalArchive.load()
             loadError = nil
-            WidgetBridge.publish(accounts)
+            notifications.reconcileResets(accounts: accounts)
         } catch { loadError = "本地数据读取失败，原文件已保留。请解锁后重试；在恢复前禁止写入。" }
     }
     func account(_ id: UUID) -> Account? { accounts.first { $0.id == id } }
@@ -28,7 +28,7 @@ final class AccountStore: ObservableObject {
         do {
             try LocalArchive.save(list)
             accounts = list
-            WidgetBridge.publish(list)
+            notifications.reconcileResets(accounts: list)
         }
         catch { throw QuotaError.message("本地保存失败，未覆盖当前账户状态，请检查设备空间或解锁后重试。") }
     }
@@ -83,6 +83,9 @@ final class AccountStore: ObservableObject {
             throw QuotaError.message("这把 API Key 已存在；不同 Key 仍可能共用同一余额池。")
         }
         var value = previous ?? Account(kind: kind, alias: name)
+        if let previous, previous.remoteID != credential.accountID || previous.identity != credential.identity {
+            value.resetAlerts = nil
+        }
         value.alias = name
         value.remoteID = credential.accountID
         value.identity = credential.identity
@@ -141,6 +144,44 @@ final class AccountStore: ObservableObject {
         value.revision = UUID()
         try update(value)
         if value.error == nil { await evaluateAlerts(id: id, revision: value.revision) }
+    }
+
+    func removeMissingRule(_ id: UUID, metricID: String) throws {
+        guard var value = account(id), value.snapshot?.metrics.contains(where: { $0.id == metricID }) != true else { return }
+        cancel(id)
+        value.rules.removeAll { $0.metricID == metricID }
+        value.latched.remove(metricID)
+        value.revision = UUID()
+        try update(value)
+    }
+
+    func reconcileResetNotifications() {
+        guard loadError == nil else { return }
+        notifications.reconcileResets(accounts: accounts)
+    }
+
+    func setResetAlert(_ id: UUID, metricID: String, enabled: Bool) async throws {
+        guard let initial = account(id), initial.kind == .codex,
+              !enabled || initial.snapshot?.metrics.contains(where: { $0.id == metricID && $0.unit == .percent && !$0.unlimited }) == true else {
+            throw QuotaError.message("此窗口不支持重置提醒。")
+        }
+        if enabled {
+            await notifications.reload()
+            if notifications.status == .notDetermined { try await notifications.authorize() }
+            guard notifications.permitted else { throw QuotaError.message("系统通知未获允许，重置提醒未开启；请在设置中允许通知。") }
+        }
+        guard var current = account(id), current.revision == initial.revision else {
+            throw QuotaError.message("账户已发生变化，请重新设置提醒。")
+        }
+        cancel(id)
+        var rules = current.resetAlerts ?? []
+        if enabled { rules.insert(metricID) } else { rules.remove(metricID) }
+        current.resetAlerts = rules.isEmpty ? nil : rules
+        current.revision = UUID()
+        try update(current)
+        if enabled, current.snapshot?.metrics.first(where: { $0.id == metricID })?.resetAt.map({ $0 > Date() }) != true {
+            message = "开关已保存，但没有可靠的未来重置时间；成功刷新取得时间后才会排程。"
+        }
     }
 
     func refresh(_ id: UUID, forced: Bool = false) async {

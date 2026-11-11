@@ -7,20 +7,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "QuotaWatch"
 BUNDLE_ID = "com.wm0104.quotawatch"
-WIDGET_ID = BUNDLE_ID + ".widget"
-APP_GROUP = "group.com.wm0104.quotawatch"
 VERSION = "0.2.2"
 BUILD = "8"
 MIN_OS = "16.3"
 APP_ENTITLEMENTS = {
     "application-identifier": BUNDLE_ID,
     "keychain-access-groups": [BUNDLE_ID],
-    "com.apple.security.application-groups": [APP_GROUP],
-    "get-task-allow": False,
-}
-WIDGET_ENTITLEMENTS = {
-    "application-identifier": WIDGET_ID,
-    "com.apple.security.application-groups": [APP_GROUP],
     "get-task-allow": False,
 }
 
@@ -51,24 +43,6 @@ def check_info(info, built=False):
         require(info.get(key) == value, "Incorrect Info.plist field: " + key)
 
 
-def check_widget_info(info, built=False):
-    expected = {
-        "CFBundleDisplayName": NAME,
-        "CFBundleExecutable": "QuotaWatchWidget" if built else "$(EXECUTABLE_NAME)",
-        "CFBundleIdentifier": WIDGET_ID if built else "$(PRODUCT_BUNDLE_IDENTIFIER)",
-        "CFBundleName": "QuotaWatchWidget" if built else "$(PRODUCT_NAME)",
-        "CFBundlePackageType": "XPC!",
-        "CFBundleShortVersionString": VERSION if built else "$(MARKETING_VERSION)",
-        "CFBundleVersion": BUILD if built else "$(CURRENT_PROJECT_VERSION)",
-        "NSExtension": {"NSExtensionPointIdentifier": "com.apple.widgetkit-extension"},
-    }
-    if built:
-        expected.update(MinimumOSVersion=MIN_OS, UIDeviceFamily=[1, 2],
-                        CFBundleSupportedPlatforms=["iPhoneOS"])
-    for key, value in expected.items():
-        require(info.get(key) == value, "Incorrect widget Info.plist field: " + key)
-
-
 def main():
     text = (ROOT / "project.yml").read_text()
     expected = {
@@ -87,38 +61,39 @@ def main():
 
     counts = {
         r'(?m)^\s*PRODUCT_BUNDLE_IDENTIFIER: com\.wm0104\.quotawatch\s*$': 1,
-        r'(?m)^\s*PRODUCT_BUNDLE_IDENTIFIER: com\.wm0104\.quotawatch\.widget\s*$': 1,
+        r'(?m)^\s*PRODUCT_BUNDLE_IDENTIFIER: com\.wm0104\.quotawatch\.widget\s*$': 0,
         r'(?m)^\s*PRODUCT_NAME: QuotaWatch\s*$': 1,
-        r'(?m)^\s*PRODUCT_NAME: QuotaWatchWidget\s*$': 1,
+        r'(?m)^\s*PRODUCT_NAME: QuotaWatchWidget\s*$': 0,
         r'(?m)^\s*INFOPLIST_FILE: QuotaWatch/Info\.plist\s*$': 1,
-        r'(?m)^\s*INFOPLIST_FILE: QuotaWatchWidget/Info\.plist\s*$': 1,
+        r'(?m)^\s*INFOPLIST_FILE: QuotaWatchWidget/Info\.plist\s*$': 0,
         r'(?m)^\s*CODE_SIGN_ENTITLEMENTS: QuotaWatch/QuotaWatch\.entitlements\s*$': 1,
-        r'(?m)^\s*CODE_SIGN_ENTITLEMENTS: QuotaWatchWidget/QuotaWatchWidget\.entitlements\s*$': 1,
-        r'(?m)^\s*TARGETED_DEVICE_FAMILY: "1,2"\s*$': 2,
+        r'(?m)^\s*CODE_SIGN_ENTITLEMENTS: QuotaWatchWidget/QuotaWatchWidget\.entitlements\s*$': 0,
+        r'(?m)^\s*TARGETED_DEVICE_FAMILY: "1,2"\s*$': 1,
         r'(?m)^\s*ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\s*$': 1,
-        r'(?m)^\s*GENERATE_INFOPLIST_FILE: "NO"\s*$': 2,
-        r'(?m)^\s*APPLICATION_EXTENSION_API_ONLY: "YES"\s*$': 1,
-        r'(?m)^\s*SKIP_INSTALL: "YES"\s*$': 1,
-        r'(?m)^\s*embed: true\s*$': 1,
+        r'(?m)^\s*GENERATE_INFOPLIST_FILE: "NO"\s*$': 1,
+        r'(?m)^\s*APPLICATION_EXTENSION_API_ONLY: "YES"\s*$': 0,
+        r'(?m)^\s*SKIP_INSTALL: "YES"\s*$': 0,
+        r'(?m)^\s*embed: true\s*$': 0,
     }
     for pattern, count in counts.items():
         require(len(re.findall(pattern, text)) == count,
                 "Incorrect project.yml occurrence count: " + pattern)
 
     targets = re.findall(r'(?m)^ +deploymentTarget: "([^"]+)"$', text)
-    require(targets == [MIN_OS, MIN_OS], "Deployment targets are not synchronized")
+    require(targets == [MIN_OS], "Deployment targets are not synchronized")
 
     with (ROOT / NAME / "Info.plist").open("rb") as stream:
         check_info(plistlib.load(stream))
     with (ROOT / NAME / (NAME + ".entitlements")).open("rb") as stream:
         require(plistlib.load(stream) == APP_ENTITLEMENTS,
                 "App entitlements exceed the minimal allowlist")
-    with (ROOT / "QuotaWatchWidget" / "Info.plist").open("rb") as stream:
-        check_widget_info(plistlib.load(stream), built=False)
-    with (ROOT / "QuotaWatchWidget" / "QuotaWatchWidget.entitlements").open("rb") as stream:
-        require(plistlib.load(stream) == WIDGET_ENTITLEMENTS,
-                "Widget entitlements exceed the minimal allowlist")
-    print("Build identity, app/widget entitlements, version and background mode: passed")
+    require(not (ROOT / "QuotaWatchWidget").exists(), "Formal widget sources remain")
+    require(not (ROOT / "QuotaWatchWidgetShared").exists(), "Formal shared storage remains")
+    require(not (ROOT / "QuotaWatch/WidgetBridge.swift").exists(), "Formal widget bridge remains")
+    require("QuotaWatchWidget" not in text and "QuotaWatchWidgetShared" not in text,
+            "Formal widget target or dependency remains")
+    print("Build identity, minimal app entitlements, version and no formal widget: passed")
+
 
 
 if __name__ == "__main__":
